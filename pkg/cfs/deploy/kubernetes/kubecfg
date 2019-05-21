@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Config
+preferences: {}
+clusters:
+- cluster:
+    insecure-skip-tls-verify: true
+    server: http://10.206.6.171:6443  //kubernetes api server

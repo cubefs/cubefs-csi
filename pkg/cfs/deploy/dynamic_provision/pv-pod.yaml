@@ -1,0 +1,20 @@
+kind: Pod
+apiVersion: v1
+metadata:
+  name: pv-pod
+spec:
+  nodeName: 10.206.7.17
+  volumes:
+    - name: task-pv-storage
+      persistentVolumeClaim:
+       claimName: cfs-pvc
+  containers:
+    - name: task-pv-container
+      image: nginx
+      imagePullPolicy: "IfNotPresent"
+      ports:
+        - containerPort: 80
+          name: "http-server"
+      volumeMounts:
+        - mountPath: "/usr/share/nginx/html111"
+          name: task-pv-storage

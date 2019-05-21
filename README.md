@@ -6,4 +6,4 @@ ChubaoFS Container Storage Interface (CSI) plugins.
 
 ## Compatibility
 
-CSI spec version.
+CSI spec version 0.3.0.
