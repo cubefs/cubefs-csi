@@ -21,13 +21,14 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/chubaofs/chubaofs-csi/pkg/cfs"
+	cfs "github.com/chubaofs/chubaofs-csi/pkg/chubaofs"
 	"github.com/spf13/cobra"
 )
 
 var (
-	endpoint string
-	nodeID   string
+	endpoint   string
+	nodeID     string
+	driverName string
 )
 
 func init() {
@@ -35,12 +36,11 @@ func init() {
 }
 
 func main() {
-
 	flag.CommandLine.Parse([]string{})
 
 	cmd := &cobra.Command{
-		Use:   "CFS",
-		Short: "CSI based CFS driver",
+		Use:   "chubaofsplugin --endpoint <endpoint> --nodeid <nodeid>",
+		Short: "CSI based chubaofs plugin driver",
 		Run: func(cmd *cobra.Command, args []string) {
 			handle()
 		},
@@ -54,8 +54,10 @@ func main() {
 	cmd.PersistentFlags().StringVar(&endpoint, "endpoint", "", "CSI endpoint")
 	cmd.MarkPersistentFlagRequired("endpoint")
 
+	cmd.PersistentFlags().StringVar(&driverName, "drivername", "chubaofs.csi.k8s.io", "name of the driver")
+
 	if err := cmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "%s", err.Error())
+		fmt.Fprintf(os.Stderr, "%v", err)
 		os.Exit(1)
 	}
 
@@ -63,6 +65,6 @@ func main() {
 }
 
 func handle() {
-	d := cfs.NewDriver(nodeID, endpoint)
+	d, _ := cfs.NewDriver(driverName, nodeID, endpoint)
 	d.Run()
 }
