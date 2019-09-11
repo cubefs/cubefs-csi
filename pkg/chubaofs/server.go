@@ -18,6 +18,7 @@ package chubaofs
 
 import (
 	"net"
+	"os"
 	"sync"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -58,7 +59,19 @@ func (s *server) ForceStop() {
 }
 
 func (s *server) serve(endpoint string, ids csi.IdentityServer, cs csi.ControllerServer, ns csi.NodeServer) {
-	listener, err := net.Listen("tcp", endpoint)
+	proto, addr, err := parseEndpoint(endpoint)
+	if err != nil {
+		glog.Fatal(err.Error())
+	}
+
+	if proto == "unix" {
+		addr = "/" + addr
+		if e := os.Remove(addr); e != nil && !os.IsNotExist(e) {
+			glog.Fatalf("Failed to remove %s, error: %s", addr, e.Error())
+		}
+	}
+
+	listener, err := net.Listen(proto, addr)
 	if err != nil {
 		glog.Fatalf("Failed to listen: %v", err)
 	}

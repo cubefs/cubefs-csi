@@ -1,4 +1,4 @@
-package cfs
+package chubaofs
 
 import (
 	"encoding/json"

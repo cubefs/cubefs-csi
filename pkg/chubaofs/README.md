@@ -40,10 +40,10 @@ docker pull quay.io/k8scsi/csi-provisioner:v0.3.0
 
 ### Deploy csi-sidecar and cfs csi-driver
 
-```kubectl apply -f deploy/dynamic_provision/cfs-rbac.yaml```
-```kubectl apply -f deploy/dynamic_provision/cfs-sc.yaml```
-```kubectl apply -f deploy/dynamic_provision/cfs-pvc.yaml```
-```kubectl apply -f deploy/dynamic_provision/cfs-sidecar.yaml```
+```kubectl2 apply -f deploy/dynamic_provision/cfs-rbac.yaml```
+```kubectl2 apply -f deploy/dynamic_provision/cfs-sc.yaml```
+```kubectl2 apply -f deploy/dynamic_provision/cfs-pvc.yaml```
+```kubectl2 apply -f deploy/dynamic_provision/cfs-sidecar.yaml```
 
 ### Pre Volume: you must know volumeName first, example Nginx application
 
@@ -53,5 +53,5 @@ Please update the cfs Master Hosts & volumeName information in pv-pod.yaml file.
 
 ```
 docker pull nginx
-kubectl apply -f deploy/dynamic_provision/pv-pod.yaml
+kubectl2 apply -f deploy/dynamic_provision/pv-pod.yaml
 ```
