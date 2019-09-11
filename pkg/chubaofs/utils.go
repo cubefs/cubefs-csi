@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"strings"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -189,4 +190,13 @@ func generateFile(filePath string, data []byte) (int, error) {
 	}
 	defer fw.Close()
 	return fw.Write(data)
+}
+func parseEndpoint(ep string) (string, string, error) {
+	if strings.HasPrefix(strings.ToLower(ep), "unix://") || strings.HasPrefix(strings.ToLower(ep), "tcp://") {
+		s := strings.SplitN(ep, "://", 2)
+		if s[1] != "" {
+			return s[0], s[1], nil
+		}
+	}
+	return "", "", fmt.Errorf("invalid endpoint: %v", ep)
 }
