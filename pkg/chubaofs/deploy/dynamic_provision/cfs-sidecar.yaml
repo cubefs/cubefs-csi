@@ -7,7 +7,7 @@ metadata:
   namespace: default
 spec:
   serviceAccount: csi-service-account
-  nodeName: 10.206.7.17
+  nodeName: 172.22.163.22 
   containers:
   - name: external-provisioner
     args:
@@ -74,7 +74,7 @@ spec:
         fieldRef:
           apiVersion: v1
           fieldPath: spec.nodeName
-    image: ishc.harbor.svc.hcyf.n.jd.local/chubaofs35/cfscsi:v2
+    image: ishc.harbor.svc.hcyf.n.jd.local/chubaofs35/cfscsi:v2.2
     imagePullPolicy: IfNotPresent
     securityContext:
       privileged: true

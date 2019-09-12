@@ -4,6 +4,6 @@ RUN yum install -y fuse
 RUN mkdir -p /etc/cfs/
 
 ADD cfs-client /usr/bin/
-ADD cfsplugin /
+ADD csi-cfsplugin /
 
-ENTRYPOINT ["/cfsplugin"]
+ENTRYPOINT ["/csi-cfsplugin"]

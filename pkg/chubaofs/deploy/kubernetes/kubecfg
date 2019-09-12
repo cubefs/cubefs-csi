@@ -4,4 +4,4 @@ preferences: {}
 clusters:
 - cluster:
     insecure-skip-tls-verify: true
-    server: http://10.206.6.171:6443  //kubernetes api server
+    server: https://172.22.162.29:6443 

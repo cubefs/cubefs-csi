@@ -9,6 +9,10 @@ kind: ClusterRole
 metadata:
   name: csi-cluster-role
 rules:
+- nonResourceURLs:
+  - /version
+  verbs: 
+  - get 
 - apiGroups:
   - ""
   resources:
