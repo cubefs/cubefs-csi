@@ -3,7 +3,7 @@ apiVersion: v1
 metadata:
   name: pv-pod
 spec:
-  nodeName: 10.206.7.17
+  nodeName: 172.22.163.22 
   volumes:
     - name: task-pv-storage
       persistentVolumeClaim:

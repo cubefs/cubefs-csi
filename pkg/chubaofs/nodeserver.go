@@ -91,7 +91,6 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	cfgmap[KMasterAddr] = masterAddr
 	// FIXME
 	cfgmap[KLogDir] = "/export/Logs/cfs"
-	cfgmap[KWarnLogDir] = "/export/Logs/cfs/warn/client"
 	cfgmap[KLogLevel] = "error"
 	cfgmap[KOwner] = defaultOwner
 	cfgmap[KProfPort] = "10094"
