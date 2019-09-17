@@ -5,7 +5,5 @@ metadata:
 provisioner: csi-cfsplugin
 reclaimPolicy: Retain
 parameters:
-  cfsMaster1: 172.20.240.95:80
-  cfsMaster2: 172.20.240.94:80
-  cfsMaster3: 172.20.240.67:80
-  volName: csi-dep
+  cfsMaster: cfs.csi.test
+  volName: cfs-csi-test

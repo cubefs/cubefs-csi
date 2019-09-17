@@ -4,4 +4,18 @@ preferences: {}
 clusters:
 - cluster:
     insecure-skip-tls-verify: true
-    server: http://10.206.6.171:6443  //kubernetes api server
+    server: https://172.0.0.1:6443
+  name: cluster-auth
+contexts:
+- context:
+    cluster: cluster-auth
+    user: kubecsi
+  name: cluster-auth
+current-context: cluster-auth
+kind: Config
+preferences: {}
+users:
+- name: kubecsi
+  user:
+    password: *****
+    username: cfs

@@ -6,6 +6,8 @@ metadata:
   name: cfscsi-pod
   namespace: default
 spec:
+  imagePullSecrets:
+  - name: registry-key
   serviceAccount: csi-service-account
   nodeName: 10.206.7.17
   containers:
@@ -74,7 +76,7 @@ spec:
         fieldRef:
           apiVersion: v1
           fieldPath: spec.nodeName
-    image: cfscsi:v2
+    image: quay.io/k8scsi/cfscsi:v1
     imagePullPolicy: IfNotPresent
     securityContext:
       privileged: true
