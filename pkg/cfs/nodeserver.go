@@ -74,26 +74,27 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		mo = append(mo, "ro")
 	}
 
-	master1 := req.GetVolumeAttributes()[KEY_CFS_MASTER1]
-	master2 := req.GetVolumeAttributes()[KEY_CFS_MASTER2]
-	master3 := req.GetVolumeAttributes()[KEY_CFS_MASTER3]
+	master := req.GetVolumeAttributes()[KEY_CFS_MASTER]
 	volName := req.GetVolumeAttributes()[KEY_VOLUME_NAME]
 
 	cfgmap := make(map[string]interface{})
-	cfgmap[FUSE_KEY_MOUNT_POINT_V1] = targetPath
-	cfgmap[FUSE_KEY_MOUNT_POINT_V2] = targetPath
-	cfgmap[FUSE_KEY_VOLUME_NAME_V1] = volName
-	cfgmap[FUSE_KEY_VOLUME_NAME_V2] = volName
-	cfgmap[FUSE_KEY_MASTER_ADDR_V1] = master1 + "," + master2 + "," + master3
-	cfgmap[FUSE_KEY_MASTER_ADDR_V2] = master1 + "," + master2 + "," + master3
-	cfgmap[FUSE_KEY_LOG_PATH_V1] = "/export/Logs/cfs/client/"
-	cfgmap[FUSE_KEY_LOG_PATH_V2] = "/export/Logs/cfs/client/"
-	cfgmap[FUSE_KEY_LOG_LEVEL_V1] = "error"
-	cfgmap[FUSE_KEY_LOG_LEVEL_V2] = "error"
-	cfgmap[FUSE_KEY_LOOKUP_VALID_V1] = "30"
-	cfgmap[FUSE_KEY_OWNER_V1] = "cfs"
-	cfgmap[FUSE_KEY_PROF_PORT_V1] = "10094"
-	cfgmap[FUSE_KEY_PROF_PORT_V2] = "10094"
+	cfgmap[FUSE_KEY_MOUNT_POINT] = targetPath
+	cfgmap[FUSE_KEY_VOLUME_NAME] = volName
+	cfgmap[FUSE_KEY_MASTER_ADDR] = master
+	cfgmap[FUSE_KEY_LOG_PATH] = "/export/Logs/cfs/client/"
+	cfgmap[FUSE_KEY_LOG_UMP_WARN_LOG_DIR] = "/export/Logs/cfs/client/warn/"
+	cfgmap[FUSE_KEY_LOG_LEVEL] = "error"
+	cfgmap[FUSE_KEY_LOOKUP_VALID] = "30"
+	cfgmap[FUSE_KEY_OWNER] = "cfs"
+	cfgmap[FUSE_KEY_PROF_PORT] = "10094"
+	//the parameters below are all set by default value
+	cfgmap[FUSE_KEY_ICACHE_TIMEOUT] = ""
+	cfgmap[FUSE_KEY_ATTR_VALID] = ""
+	cfgmap[FUSE_KEY_EN_SYNC_WRITE] = ""
+	cfgmap[FUSE_KEY_AUTO_INVAL_DATA] = ""
+	cfgmap[FUSE_KEY_RDONLY] = "false"
+	cfgmap[FUSE_KEY_WRITE_CACHE] = "false"
+	cfgmap[FUSE_KEY_KEEP_CACHE] = "false"
 
 	cfgstr, err := json.MarshalIndent(cfgmap, "", "      ")
 	if err != nil {
