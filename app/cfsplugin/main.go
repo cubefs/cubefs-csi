@@ -28,6 +28,7 @@ import (
 var (
 	endpoint string
 	nodeID   string
+	masterAddress string
 )
 
 func init() {
@@ -54,6 +55,9 @@ func main() {
 	cmd.PersistentFlags().StringVar(&endpoint, "endpoint", "", "CSI endpoint")
 	cmd.MarkPersistentFlagRequired("endpoint")
 
+	cmd.PersistentFlags().StringVar(&masterAddress, "masterAddress", "", "CFS masterAddress")
+	cmd.MarkPersistentFlagRequired("masterAddress")
+
 	if err := cmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "%s", err.Error())
 		os.Exit(1)
@@ -63,6 +67,6 @@ func main() {
 }
 
 func handle() {
-	d := cfs.NewDriver(nodeID, endpoint)
+	d := cfs.NewDriver(nodeID, endpoint, masterAddress)
 	d.Run()
 }

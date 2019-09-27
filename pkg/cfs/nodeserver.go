@@ -36,6 +36,7 @@ import (
 
 type nodeServer struct {
 	*csicommon.DefaultNodeServer
+	masterAddress string
 }
 
 func WriteBytes(filePath string, b []byte) (int, error) {
@@ -74,7 +75,7 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		mo = append(mo, "ro")
 	}
 
-	master := req.GetVolumeAttributes()[KEY_CFS_MASTER]
+	master := ns.masterAddress
 	volName := req.GetVolumeAttributes()[KEY_VOLUME_NAME]
 
 	cfgmap := make(map[string]interface{})

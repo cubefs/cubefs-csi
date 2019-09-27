@@ -8,51 +8,6 @@ import (
 	"net/http"
 )
 
-type GetClusterResponseData struct {
-	LeaderAddr string `json:"LeaderAddr"`
-}
-
-type GetClusterResponse struct {
-	Code int                     `json:"code"`
-	Msg  string                  `json:"msg"`
-	Data *GetClusterResponseData `json:"data"`
-}
-
-func GetClusterInfo(host string) (string, error) {
-	// TODO: pass multiple hosts, and retry to find one
-	getClusterUrl := "http://" + host + "/admin/getCluster"
-	glog.V(2).Infof("CFS: getCluster url:%v", getClusterUrl)
-
-	resp, err := http.Get(getClusterUrl)
-	if err != nil {
-		glog.Errorf("Get cfs Cluster info failed, error:%v", err)
-		return "", err
-	}
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		glog.Errorf("Read response of getCluster is failed. err:%v", err)
-		return "", err
-	}
-
-	var cfsClusterResp = &GetClusterResponse{}
-	if err := json.Unmarshal(body, cfsClusterResp); err != nil {
-		glog.Errorf("Cannot unmarshal response of getCluster. bodyLen:%d, err:%v", len(body), err)
-		return "", err
-	}
-	glog.V(2).Infof("CFS: getCluster response:%v", cfsClusterResp)
-
-	if cfsClusterResp.Code != 0 {
-		glog.Error("CFS: get cluster is failed. code:%v, msg:%v", cfsClusterResp.Code, cfsClusterResp.Msg)
-		return "", fmt.Errorf("get cluster is failed")
-	}
-	if cfsClusterResp.Data == nil {
-		glog.Error("CFS: data of cluster info is empty.")
-		return "", fmt.Errorf("data of cluster info is empty")
-	}
-
-	return cfsClusterResp.Data.LeaderAddr, nil
-}
 
 type CreateDeleteVolumeResponse struct {
 	Code int    `json:"code"`
@@ -116,6 +71,10 @@ func DeleteVolume(host string, volumeName string) error {
 	glog.V(2).Infof("CFS: deleteVol response:%v", cfsDeleteVolumeResp)
 
 	if cfsDeleteVolumeResp.Code != 0 {
+		if cfsDeleteVolumeResp.Code == 7{
+			glog.Warning("CFS: volume not exists, assuming the volume has already been deleted. code:%v, msg:%v", cfsDeleteVolumeResp.Code, cfsDeleteVolumeResp.Msg)
+			return nil
+		}
 		glog.Errorf("CFS: delete volume is failed. code:%v, msg:%v", cfsDeleteVolumeResp.Code, cfsDeleteVolumeResp.Msg)
 		return fmt.Errorf("delete volume is failed")
 	}

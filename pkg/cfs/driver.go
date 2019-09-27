@@ -11,7 +11,7 @@ type driver struct {
 	csiDriver   *csicommon.CSIDriver
 	endpoint    string
 	cloudconfig string
-
+	masterAddress string
 	ids *csicommon.DefaultIdentityServer
 	cs  *controllerServer
 	ns  *nodeServer
@@ -28,12 +28,14 @@ var (
 	version = "0.3.0"
 )
 
-func NewDriver(nodeID, endpoint string) *driver {
+func NewDriver(nodeID, endpoint, masterAddress string) *driver {
 	glog.Infof("Driver: %v version: %v", driverName, version)
 
 	d := &driver{}
 
 	d.endpoint = endpoint
+
+	d.masterAddress = masterAddress
 
 	csiDriver := csicommon.NewCSIDriver(driverName, version, nodeID)
 	csiDriver.AddControllerServiceCapabilities(
@@ -50,13 +52,14 @@ func NewDriver(nodeID, endpoint string) *driver {
 func NewControllerServer(d *driver) *controllerServer {
 	return &controllerServer{
 		DefaultControllerServer: csicommon.NewDefaultControllerServer(d.csiDriver),
-		cfsMasterHosts:          make(map[string][]string),
+		masterAddress: d.masterAddress,
 	}
 }
 
 func NewNodeServer(d *driver) *nodeServer {
 	return &nodeServer{
 		DefaultNodeServer: csicommon.NewDefaultNodeServer(d.csiDriver),
+		masterAddress: d.masterAddress,
 	}
 }
 

@@ -1,0 +1,83 @@
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: cfscsi-node
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: cfscsi-node
+  template:
+    metadata:
+      labels:
+        app: cfscsi-node
+    spec:
+      imagePullSecrets:
+        - name: registry-key
+      serviceAccount: csi-service-account
+      containers:
+        - name: driver-registrar
+          args:
+            - --v=5
+            - --csi-address=/csi/csi.sock
+            - --kubeconfig=/etc/k8s/kubecfg
+            - --kubelet-registration-path=/var/lib/kubelet/plugins/csi-cfsplugin/csi.sock
+          env:
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.nodeName
+          image: quay.io/k8scsi/driver-registrar:v0.3.0
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - mountPath: /csi
+              name: socket-dir
+            - mountPath: /registration
+              name: registration-dir
+            - name: kubecfg
+              mountPath: /etc/k8s
+
+        - name: cfs-driver
+          args:
+            - --v=5
+            - --endpoint=$(CSI_ENDPOINT)
+            - --nodeid=$(KUBE_NODE_NAME)
+            - --masterAddress=$(MASTER_ADDRESS)
+          env:
+            - name: MASTER_ADDRESS
+              value: cfs.jd.com
+            - name: CSI_ENDPOINT
+              value: unix:///csi/csi.sock
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.nodeName
+          image: quay.io/k8scsi/cfscsi:v1.6
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - mountPath: /csi
+              name: socket-dir
+            - mountPath: /export/kubelet/pods
+              mountPropagation: Bidirectional
+              name: mountpoint-dir
+
+      volumes:
+        - hostPath:
+            path: /var/lib/kubelet/plugins/csi-cfsplugin
+            type: DirectoryOrCreate
+          name: socket-dir
+        - hostPath:
+            path: /export/kubelet/plugins/registration
+            type: DirectoryOrCreate
+          name: registration-dir
+        - hostPath:
+            path: /export/kubelet/pods
+            type: DirectoryOrCreate
+          name: mountpoint-dir
+        - configMap:
+            name: kubecfg
+          name: kubecfg

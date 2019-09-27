@@ -23,7 +23,6 @@ import (
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
 	"k8s.io/kubernetes/pkg/volume/util"
-	"sync"
 )
 
 const (
@@ -53,9 +52,7 @@ const (
 
 type controllerServer struct {
 	*csicommon.DefaultControllerServer
-
-	cfsMasterHostsLock sync.RWMutex
-	cfsMasterHosts     map[string][]string
+	masterAddress string
 }
 
 func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (*csi.CreateVolumeResponse, error) {
@@ -77,19 +74,13 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	cfsVolSizeGB := int(util.RoundUpSize(volSizeBytes, ALLOCATE_CFS_VOL_SIZE_UNIT))
 
 	volName := req.GetParameters()[KEY_VOLUME_NAME]
-	cfsMasterHost := req.GetParameters()[KEY_CFS_MASTER]
-	cs.putMasterHosts(volName, cfsMasterHost)
+	masterAddress := cs.masterAddress
 	glog.V(4).Infof("GetName:%v", req.GetName())
 	glog.V(4).Infof("GetParameters:%v", req.GetParameters())
 	glog.V(4).Infof("allocate volume size(GB):%v for name:%v", cfsVolSizeGB, volName)
+	glog.V(4).Infof("CFS Master Leader Host is:%v", masterAddress)
 
-	cfsMasterLeader, err := GetClusterInfo(cfsMasterHost)
-	if err != nil {
-		return nil, err
-	}
-	glog.V(4).Infof("CFS Master Leader Host is:%v", cfsMasterLeader)
-
-	if err := CreateVolume(cfsMasterLeader, volName, cfsVolSizeGB); err != nil {
+	if err := CreateVolume(masterAddress, volName, cfsVolSizeGB); err != nil {
 		return nil, err
 	}
 	glog.V(2).Infof("CFS Create Volume:%v success.", volName)
@@ -100,7 +91,7 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 			CapacityBytes: volSizeBytes,
 			Attributes: map[string]string{
 				KEY_VOLUME_NAME: volName,
-				KEY_CFS_MASTER:  cfsMasterHost,
+				KEY_CFS_MASTER:  masterAddress,
 			},
 		},
 	}
@@ -115,20 +106,15 @@ func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	}
 	volumeId := req.VolumeId
 
-	cfsMasterHosts := cs.getMasterHosts(volumeId)
-	if len(cfsMasterHosts) == 0 {
+	masterAddress := cs.masterAddress
+	if len(masterAddress) == 0 {
 		glog.Errorf("Not Found CFS master hosts for volumeId:%v", volumeId)
 		return nil, fmt.Errorf("no master hosts")
 	}
 
-	GetClusterInfo(cfsMasterHosts[0])
-	cfsMasterLeader, err := GetClusterInfo(cfsMasterHosts[0])
-	if err != nil {
-		return nil, err
-	}
-	glog.V(4).Infof("CFS Master Leader Host is:%v", cfsMasterLeader)
+	glog.V(4).Infof("CFS Master Leader hosts is:%v", masterAddress)
 
-	if err := DeleteVolume(cfsMasterLeader, volumeId); err != nil {
+	if err := DeleteVolume(masterAddress, volumeId); err != nil {
 		return nil, err
 	}
 	glog.V(2).Infof("Delete cfs volume :%s deleted success", volumeId)
@@ -145,18 +131,3 @@ func (cs *controllerServer) ValidateVolumeCapabilities(ctx context.Context, req 
 	return &csi.ValidateVolumeCapabilitiesResponse{Supported: true, Message: ""}, nil
 }
 
-func (cs *controllerServer) putMasterHosts(volumeName string, hosts ...string) {
-	cs.cfsMasterHostsLock.Lock()
-	defer cs.cfsMasterHostsLock.Unlock()
-	cs.cfsMasterHosts[volumeName] = hosts
-}
-
-func (cs *controllerServer) getMasterHosts(volumeName string) []string {
-	cs.cfsMasterHostsLock.Lock()
-	defer cs.cfsMasterHostsLock.Unlock()
-	hosts, found := cs.cfsMasterHosts[volumeName]
-	if found {
-		return hosts
-	}
-	return nil
-}
