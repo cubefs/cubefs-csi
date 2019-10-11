@@ -5,5 +5,4 @@ metadata:
 provisioner: csi-cfsplugin
 reclaimPolicy: Retain
 parameters:
-  masterAddr: 172.20.240.95:80;172.20.240.94:80;172.20.240.67:80
-  volName: cfsvol-csi 
+  volName: cfs-csi-test

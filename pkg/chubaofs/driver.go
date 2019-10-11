@@ -7,9 +7,10 @@ import (
 )
 
 type driver struct {
-	name     string
-	nodeID   string
-	endpoint string
+	name          string
+	nodeID        string
+	endpoint      string
+	masterAddress string
 
 	ids *identityServer
 	cs  *controllerServer
@@ -20,7 +21,7 @@ var (
 	version = "1.0.0"
 )
 
-func NewDriver(driverName, nodeID, endpoint string) (*driver, error) {
+func NewDriver(driverName, nodeID, endpoint string, masterAddress string) (*driver, error) {
 	if driverName == "" {
 		return nil, fmt.Errorf("No driver name provided")
 	}
@@ -33,19 +34,24 @@ func NewDriver(driverName, nodeID, endpoint string) (*driver, error) {
 		return nil, fmt.Errorf("No driver endpoint provided")
 	}
 
+	if masterAddress == "" {
+		return nil, fmt.Errorf("No master address provided")
+	}
+
 	glog.Infof("Driver: %v Version: %v", driverName, version)
 
 	return &driver{
-		name:     driverName,
-		nodeID:   nodeID,
-		endpoint: endpoint,
+		name:          driverName,
+		nodeID:        nodeID,
+		endpoint:      endpoint,
+		masterAddress: masterAddress,
 	}, nil
 }
 
 func (d *driver) Run() {
 	d.ids = NewIdentityServer(d.name, version)
-	d.cs = NewControllerServer()
-	d.ns = NewNodeServer(d.nodeID)
+	d.cs = NewControllerServer(d.masterAddress)
+	d.ns = NewNodeServer(d.nodeID, d.masterAddress)
 
 	// TODO:
 	s := NewServer()
