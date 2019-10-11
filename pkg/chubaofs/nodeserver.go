@@ -30,12 +30,14 @@ import (
 )
 
 type nodeServer struct {
-	nodeID string
+	nodeID        string
+	masterAddress string
 }
 
-func NewNodeServer(nodeId string) *nodeServer {
+func NewNodeServer(nodeId string, masterAddress string) *nodeServer {
 	return &nodeServer{
-		nodeID: nodeId,
+		nodeID:        nodeId,
+		masterAddress: masterAddress,
 	}
 }
 
@@ -82,7 +84,7 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		mo = append(mo, "ro")
 	}
 
-	masterAddr := req.GetVolumeContext()[KMasterAddr]
+	masterAddr := ns.masterAddress
 	volName := req.GetVolumeContext()[KVolumeName]
 
 	cfgmap := make(map[string]interface{})
@@ -91,9 +93,19 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	cfgmap[KMasterAddr] = masterAddr
 	// FIXME
 	cfgmap[KLogDir] = "/export/Logs/cfs"
+	cfgmap[KWarnLogDir] = "/export/Logs/cfs/client/warn/"
 	cfgmap[KLogLevel] = "error"
 	cfgmap[KOwner] = defaultOwner
 	cfgmap[KProfPort] = "10094"
+	//the parameters below are all set by default value
+	cfgmap[KLookupValid] = "30"
+	cfgmap[KIcacheTimeout] = ""
+	cfgmap[KAttrValid] = ""
+	cfgmap[KEnSyncWrite] = ""
+	cfgmap[KAutoInvalData] = ""
+	cfgmap[KRdonly] = "false"
+	cfgmap[KWriteCache] = "false"
+	cfgmap[KKeepCache] = "false"
 
 	cfgstr, err := json.MarshalIndent(cfgmap, "", "      ")
 	if err != nil {

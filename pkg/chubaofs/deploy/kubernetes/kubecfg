@@ -4,4 +4,16 @@ preferences: {}
 clusters:
 - cluster:
     insecure-skip-tls-verify: true
-    server: https://172.22.162.29:6443 
+    server: https://172.0.0.1:6443
+  name: cluster-auth
+contexts:
+- context:
+    cluster: cluster-auth
+    user: kubecsi
+  name: cluster-auth
+current-context: cluster-auth
+users:
+- name: kubecsi
+  user:
+    password: *****
+    username: cfs

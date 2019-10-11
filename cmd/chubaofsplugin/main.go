@@ -26,9 +26,10 @@ import (
 )
 
 var (
-	endpoint   string
-	nodeID     string
-	driverName string
+	endpoint      string
+	nodeID        string
+	driverName    string
+	masterAddress string
 )
 
 func init() {
@@ -54,6 +55,9 @@ func main() {
 	cmd.PersistentFlags().StringVar(&endpoint, "endpoint", "", "CSI endpoint")
 	cmd.MarkPersistentFlagRequired("endpoint")
 
+	cmd.PersistentFlags().StringVar(&masterAddress, "masterAddress", "", "CFS masterAddress")
+	cmd.MarkPersistentFlagRequired("masterAddress")
+
 	cmd.PersistentFlags().StringVar(&driverName, "drivername", "chubaofs.csi.k8s.io", "name of the driver")
 
 	if err := cmd.Execute(); err != nil {
@@ -65,6 +69,6 @@ func main() {
 }
 
 func handle() {
-	d, _ := cfs.NewDriver(driverName, nodeID, endpoint)
+	d, _ := cfs.NewDriver(driverName, nodeID, endpoint, masterAddress)
 	d.Run()
 }

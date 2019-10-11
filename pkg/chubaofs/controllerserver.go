@@ -19,25 +19,31 @@ package chubaofs
 import (
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
-	"k8s.io/kubernetes/pkg/volume/util"
-	"strings"
-	"sync"
-
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"k8s.io/kubernetes/pkg/volume/util"
+	"strings"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 )
 
 const (
-	KMountPoint = "mountPoint"
-	KVolumeName = "volName"
-	KMasterAddr = "masterAddr"
-	KLogDir     = "logDir"
-	KWarnLogDir = "warnLogDir"
-	KLogLevel   = "logLevel"
-	KOwner      = "owner"
-	KProfPort   = "profPort"
+	KMountPoint    = "mountPoint"
+	KVolumeName    = "volName"
+	KMasterAddr    = "masterAddr"
+	KLogDir        = "logDir"
+	KWarnLogDir    = "warnLogDir"
+	KLogLevel      = "logLevel"
+	KOwner         = "owner"
+	KProfPort      = "profPort"
+	KLookupValid   = "lookupValid"
+	KIcacheTimeout = "icacheTimeout"
+	KAttrValid     = "attrValid"
+	KEnSyncWrite   = "enSyncWrite"
+	KAutoInvalData = "autoInvalData"
+	KRdonly        = "rdonly"
+	KWriteCache    = "writecache"
+	KKeepCache     = "keepcache"
 )
 
 const (
@@ -50,19 +56,17 @@ const (
 )
 
 type controllerServer struct {
-	caps []*csi.ControllerServiceCapability
-
-	masterHostsLock sync.RWMutex
-	masterHosts     map[string]string
+	caps          []*csi.ControllerServiceCapability
+	masterAddress string
 }
 
-func NewControllerServer() *controllerServer {
+func NewControllerServer(masterAddress string) *controllerServer {
 	return &controllerServer{
 		caps: getControllerServiceCapabilities(
 			[]csi.ControllerServiceCapability_RPC_Type{
 				csi.ControllerServiceCapability_RPC_CREATE_DELETE_VOLUME,
 			}),
-		masterHosts: make(map[string]string),
+		masterAddress: masterAddress,
 	}
 }
 
@@ -112,21 +116,18 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	// TODO: check if parameters are valid
 	volumeid := paras[KVolumeName]
 	owner := defaultOwner
-	masterAddr := strings.ReplaceAll(paras[KMasterAddr], ";", ",")
-	master := strings.Split(masterAddr, ",")
+	masterAddr := cs.masterAddress
 
-	cs.putMasterHosts(volumeid, masterAddr)
 	glog.V(4).Infof("GetName:%v", req.GetName())
 	glog.V(4).Infof("GetParameters:%v", paras)
 
-	leader, err := getClusterInfo(master[0])
 	if err != nil {
 		return nil, err
 	}
 
-	glog.V(4).Infof("ChubaoFS master leader addr is:%v", leader)
+	glog.V(4).Infof("ChubaoFS master address is:%v", masterAddr)
 
-	if err := createOrDeleteVolume(createVolumeRequest, leader, volumeid, owner, int64(capacityInGIB)); err != nil {
+	if err := createOrDeleteVolume(createVolumeRequest, masterAddr, volumeid, owner, int64(capacityInGIB)); err != nil {
 		return nil, err
 	}
 
@@ -150,19 +151,13 @@ func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		return nil, err
 	}
 	volumeid := req.VolumeId
+	masterAddr := cs.masterAddress
 
-	masterAddr := cs.getMasterHosts(volumeid)
 	if masterAddr == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "chubaofs: cannot find master addr, volumeid(%v)", volumeid)
 	}
-	master := strings.Split(masterAddr, ",")
 
-	leader, err := getClusterInfo(master[0])
-	if err != nil {
-		return nil, err
-	}
-
-	if err := createOrDeleteVolume(deleteVolumeRequest, leader, volumeid, defaultOwner, 0); err != nil {
+	if err := createOrDeleteVolume(deleteVolumeRequest, masterAddr, volumeid, defaultOwner, 0); err != nil {
 		return nil, err
 	}
 
@@ -219,22 +214,6 @@ func (cs *controllerServer) DeleteSnapshot(ctx context.Context, req *csi.DeleteS
 
 func (cs *controllerServer) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRequest) (*csi.ListSnapshotsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "")
-}
-
-func (cs *controllerServer) putMasterHosts(volName string, hosts string) {
-	cs.masterHostsLock.Lock()
-	defer cs.masterHostsLock.Unlock()
-	cs.masterHosts[volName] = hosts
-}
-
-func (cs *controllerServer) getMasterHosts(volName string) string {
-	cs.masterHostsLock.Lock()
-	defer cs.masterHostsLock.Unlock()
-	hosts, found := cs.masterHosts[volName]
-	if found {
-		return hosts
-	}
-	return ""
 }
 
 func (cs *controllerServer) validateControllerServiceRequest(c csi.ControllerServiceCapability_RPC_Type) error {

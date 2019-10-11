@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/golang/glog"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -40,51 +41,11 @@ type clusterInfoResponseData struct {
 	LeaderAddr string `json:"LeaderAddr"`
 }
 
-type clusterInfoResponse struct {
-	Code int                      `json:"code"`
-	Msg  string                   `json:"msg"`
-	Data *clusterInfoResponseData `json:"data"`
-}
-
 // Create and Delete Volume Response
 type generalVolumeResponse struct {
 	Code int    `json:"code"`
 	Msg  string `json:"msg"`
 	Data string `json:"data"`
-}
-
-/*
- * This functions sends http request to the on-premise cluster to
- * get cluster info.
- */
-func getClusterInfo(host string) (string, error) {
-	url := "http://" + host + "/admin/getCluster"
-	httpResp, err := http.Get(url)
-	if err != nil {
-		return "", status.Errorf(codes.Unavailable, "chubaofs: failed to get cluster info, url(%v) err(%v)", url, err)
-	}
-	defer httpResp.Body.Close()
-
-	body, err := ioutil.ReadAll(httpResp.Body)
-	if err != nil {
-		return "", status.Errorf(codes.Unavailable, "chubaofs: getClusterInfo failed to read response, url(%v) err(%v)", url, err)
-	}
-
-	resp := &clusterInfoResponse{}
-	if err = json.Unmarshal(body, resp); err != nil {
-		return "", status.Errorf(codes.Unavailable, "chubaofs: getClusterInfo failed to unmarshal, url(%v) bodyLen(%v), err(%v)", url, len(body), err)
-	}
-
-	// TODO: check if response is exist error
-	if resp.Code != 0 {
-		return "", status.Errorf(codes.Unavailable, "chubaofs: getClusterInfo response code is NOK, url(%v) code(%v) msg(%v)", url, resp.Code, resp.Msg)
-	}
-
-	if resp.Data == nil {
-		return "", status.Errorf(codes.Unavailable, "chubaofs: getClusterInfo gets nil response data, url(%v) msg(%v)", url, resp.Msg)
-	}
-
-	return resp.Data.LeaderAddr, nil
 }
 
 /*
@@ -125,9 +86,24 @@ func createOrDeleteVolume(req RequestType, leader, name, owner string, size int6
 	}
 
 	if resp.Code != 0 {
-		return status.Errorf(codes.Unavailable, "chubaofs: createOrDeleteVolume response code is NOK, url(%v) code(%v) msg(%v)", url, resp.Code, resp.Msg)
-	}
+		switch req {
+		case createVolumeRequest:
+			if resp.Code == 1 {
+				glog.Warning("chubaofs: duplicate to create volume. msg:%v", resp.Msg)
+			} else {
+				glog.Errorf("CFS: create volume is failed. code:%v, msg:%v", resp.Code, resp.Msg)
+				return fmt.Errorf("create volume is failed")
+			}
+		case deleteVolumeRequest:
+			if resp.Code == 7 {
+				glog.Warning("CFS: volume not exists, assuming the volume has already been deleted. code:%v, msg:%v", resp.Code, resp.Msg)
+			} else {
+				glog.Errorf("CFS: delete volume is failed. code:%v, msg:%v", resp.Code, resp.Msg)
+				return fmt.Errorf("delete volume is failed")
+			}
+		}
 
+	}
 	return nil
 }
 

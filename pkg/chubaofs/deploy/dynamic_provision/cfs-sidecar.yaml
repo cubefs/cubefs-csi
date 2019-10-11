@@ -6,8 +6,10 @@ metadata:
   name: cfscsi-pod
   namespace: default
 spec:
+  imagePullSecrets:
+  - name: registry-key
   serviceAccount: csi-service-account
-  nodeName: 172.22.163.22 
+  nodeName: 10.206.7.17
   containers:
   - name: external-provisioner
     args:
@@ -15,7 +17,7 @@ spec:
     - --provisioner=csi-cfsplugin
     - --csi-address=/csi/csi.sock
     - --kubeconfig=/etc/k8s/kubecfg
-    image: ishc.harbor.svc.hcyf.n.jd.local/chubaofs35/csi-provisioner:v0.3.0
+    image: quay.io/k8scsi/csi-provisioner:v0.3.0
     imagePullPolicy: IfNotPresent
     volumeMounts:
     - mountPath: /csi
@@ -35,7 +37,7 @@ spec:
         fieldRef:
           apiVersion: v1
           fieldPath: spec.nodeName
-    image: ishc.harbor.svc.hcyf.n.jd.local/chubaofs35/driver-registrar:v0.3.0
+    image: quay.io/k8scsi/driver-registrar:v0.3.0
     imagePullPolicy: IfNotPresent
     volumeMounts:
     - mountPath: /csi
@@ -53,7 +55,7 @@ spec:
     env:
     - name: ADDRESS
       value: /csi/csi.sock
-    image: ishc.harbor.svc.hcyf.n.jd.local/chubaofs35/csi-attacher:v0.3.0
+    image: quay.io/k8scsi/csi-attacher:v0.3.0
     imagePullPolicy: IfNotPresent
     volumeMounts:
     - mountPath: /csi
@@ -74,7 +76,7 @@ spec:
         fieldRef:
           apiVersion: v1
           fieldPath: spec.nodeName
-    image: ishc.harbor.svc.hcyf.n.jd.local/chubaofs35/cfscsi:v2.2
+    image: quay.io/k8scsi/cfscsi:v1
     imagePullPolicy: IfNotPresent
     securityContext:
       privileged: true
@@ -84,8 +86,6 @@ spec:
     - mountPath: /export/kubelet/pods
       mountPropagation: Bidirectional
       name: mountpoint-dir
-  imagePullSecrets:
-  - name: registry-key
 
   volumes:
   - hostPath:

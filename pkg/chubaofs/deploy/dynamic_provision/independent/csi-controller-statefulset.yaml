@@ -1,0 +1,107 @@
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: cfscsi-controller
+  labels:
+    app: csi-service
+spec:
+  selector:
+    app: cfscsi-controller
+  ports:
+    - name: http-csi
+      port: 8090
+
+---
+kind: StatefulSet
+apiVersion: apps/v1
+metadata:
+  name: cfscsi-controller
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: cfscsi-controller
+  serviceName: "cfscsi-controller"
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: cfscsi-controller
+    spec:
+      imagePullSecrets:
+        - name: registry-key
+      serviceAccount: csi-service-account
+      containers:
+        - name: external-provisioner
+          args:
+            - --v=5
+            - --provisioner=csi-cfsplugin
+            - --csi-address=/csi/csi.sock
+            - --kubeconfig=/etc/k8s/kubecfg
+          image: quay.io/k8scsi/csi-provisioner:v1.0.0
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - mountPath: /csi
+              name: socket-dir
+            - name: kubecfg
+              mountPath: /etc/k8s
+
+        - name: external-attacher
+          args:
+            - --v=5
+            - --csi-address=$(ADDRESS)
+            - --kubeconfig=/etc/k8s/kubecfg
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+          image: quay.io/k8scsi/csi-attacher:v1.0.0
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - mountPath: /csi
+              name: socket-dir
+            - name: kubecfg
+              mountPath: /etc/k8s
+
+        - name: cfs-driver
+          args:
+            - --v=5
+            - --endpoint=$(CSI_ENDPOINT)
+            - --nodeid=$(KUBE_NODE_NAME)
+            - --masterAddress=$(MASTER_ADDRESS)
+            - --drivername=$(DRIVER_NAME)
+          env:
+            - name: MASTER_ADDRESS
+              value: cfs.jd.com
+            - name: DRIVER_NAME
+              value: chubaofs-csi-v1.0.0
+            - name: CSI_ENDPOINT
+              value: unix:///csi/csi.sock
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.nodeName
+          image: quay.io/k8scsi/cfscsi:v1.0.0
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - mountPath: /csi
+              name: socket-dir
+            - mountPath: /export/kubelet/pods
+              mountPropagation: Bidirectional
+              name: mountpoint-dir
+
+      volumes:
+        - hostPath:
+            path: /var/lib/kubelet/plugins/csi-cfsplugin
+            type: DirectoryOrCreate
+          name: socket-dir
+        - hostPath:
+            path: /export/kubelet/pods
+            type: DirectoryOrCreate
+          name: mountpoint-dir
+        - configMap:
+            name: kubecfg
+          name: kubecfg

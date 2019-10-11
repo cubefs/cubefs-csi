@@ -29,7 +29,7 @@ cfs:
 	if [ ! -d ./vendor ]; then dep ensure -vendor-only; fi
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o _output/cfsplugin ./cmd/chubaofsplugin
 cfs-container: cfs
-	docker build -t $(IMAGE_TAG) ./pkg/cfs/deploy/.
+	docker build -t $(IMAGE_TAG) ./pkg/chubaofs/deploy/.
 push: cfs-container
 	docker push $(IMAGE_TAG)
 clean:
