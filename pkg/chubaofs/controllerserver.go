@@ -17,8 +17,8 @@ limitations under the License.
 package chubaofs
 
 import (
+	"context"
 	"github.com/golang/glog"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/kubernetes/pkg/volume/util"
@@ -114,9 +114,10 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	paras := req.GetParameters()
 
 	// TODO: check if parameters are valid
-	volumeid := paras[KVolumeName]
+
 	owner := defaultOwner
 	masterAddr := cs.masterAddress
+	volumeId := req.GetName()
 
 	glog.V(4).Infof("GetName:%v", req.GetName())
 	glog.V(4).Infof("GetParameters:%v", paras)
@@ -127,15 +128,15 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 
 	glog.V(4).Infof("ChubaoFS master address is:%v", masterAddr)
 
-	if err := createOrDeleteVolume(createVolumeRequest, masterAddr, volumeid, owner, int64(capacityInGIB)); err != nil {
+	if err := createOrDeleteVolume(createVolumeRequest, masterAddr, volumeId, owner, int64(capacityInGIB)); err != nil {
 		return nil, err
 	}
 
-	glog.V(2).Infof("ChubaoFS create volume:%v success.", volumeid)
+	glog.V(2).Infof("ChubaoFS create volume:%v success.", volumeId)
 
 	resp := &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
-			VolumeId:      volumeid,
+			VolumeId:      volumeId,
 			CapacityBytes: capacity,
 			VolumeContext: paras,
 		},
@@ -150,18 +151,18 @@ func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 		glog.Errorf("invalid delete volume req: %v", req)
 		return nil, err
 	}
-	volumeid := req.VolumeId
+	volumeId := req.VolumeId
 	masterAddr := cs.masterAddress
 
 	if masterAddr == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "chubaofs: cannot find master addr, volumeid(%v)", volumeid)
+		return nil, status.Errorf(codes.InvalidArgument, "chubaofs: cannot find master addr, volumeid(%v)", volumeId)
 	}
 
-	if err := createOrDeleteVolume(deleteVolumeRequest, masterAddr, volumeid, defaultOwner, 0); err != nil {
+	if err := createOrDeleteVolume(deleteVolumeRequest, masterAddr, volumeId, defaultOwner, 0); err != nil {
 		return nil, err
 	}
 
-	glog.V(2).Infof("Delete cfs volume :%s deleted success", volumeid)
+	glog.V(2).Infof("Delete cfs volume :%s deleted success", volumeId)
 
 	return &csi.DeleteVolumeResponse{}, nil
 }

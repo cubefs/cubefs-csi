@@ -17,9 +17,9 @@ limitations under the License.
 package chubaofs
 
 import (
+	"context"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/glog"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

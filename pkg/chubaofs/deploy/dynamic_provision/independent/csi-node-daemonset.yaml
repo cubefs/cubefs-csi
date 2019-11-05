@@ -2,7 +2,7 @@ kind: DaemonSet
 apiVersion: apps/v1
 metadata:
   name: cfscsi-node
-  namespace: default
+  namespace: chubaofs
 spec:
   selector:
     matchLabels:
@@ -12,23 +12,29 @@ spec:
       labels:
         app: cfscsi-node
     spec:
-      imagePullSecrets:
-        - name: registry-key
       serviceAccount: csi-service-account
       containers:
         - name: driver-registrar
           args:
             - --v=5
-            - --csi-address=/csi/csi.sock
+            - --csi-address=$(ADDRESS)
             - --kubeconfig=/etc/k8s/kubecfg
-            - --kubelet-registration-path=/var/lib/kubelet/plugins/csi-cfsplugin/csi.sock
+            - --kubelet-registration-path=$(DRIVER_REG_SOCK_PATH)
+          lifecycle:
+            preStop:
+            exec:
+            command: ["/bin/sh", "-c", "rm -rf /registration/chubaofs-csi-v1.0.0-reg.sock /csi/csi.sock"]
           env:
             - name: KUBE_NODE_NAME
               valueFrom:
                 fieldRef:
                   apiVersion: v1
                   fieldPath: spec.nodeName
-          image: quay.io/k8scsi/driver-registrar:v1.0.2
+            - name: ADDRESS
+              value: /csi/csi.sock
+            - name: DRIVER_REG_SOCK_PATH
+              value: /export/kubelet/plugins/chubaofs-csi-v1.0.0/csi.sock
+          image: quay.io/k8scsi/csi-node-driver-registrar:v1.0.2
           imagePullPolicy: IfNotPresent
           volumeMounts:
             - mountPath: /csi
@@ -70,15 +76,15 @@ spec:
 
       volumes:
         - hostPath:
-            path: /var/lib/kubelet/plugins/csi-cfsplugin
+            path: /export/kubelet/plugins/chubaofs-csi-v1.0.0
             type: DirectoryOrCreate
           name: socket-dir
         - hostPath:
-            path: /export/kubelet/plugins/registration
+            path: /export/kubelet/plugins_registry/
             type: DirectoryOrCreate
           name: registration-dir
         - hostPath:
-            path: /export/kubelet/pods
+            path: /export/kubelet/pods/
             type: DirectoryOrCreate
           name: mountpoint-dir
         - configMap:

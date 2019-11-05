@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"os"
 
-	"golang.org/x/net/context"
+	"context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/kubernetes/pkg/util/mount"
@@ -85,11 +85,11 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	}
 
 	masterAddr := ns.masterAddress
-	volName := req.GetVolumeContext()[KVolumeName]
+	volumeId := req.GetVolumeId()
 
 	cfgmap := make(map[string]interface{})
 	cfgmap[KMountPoint] = targetPath
-	cfgmap[KVolumeName] = volName
+	cfgmap[KVolumeName] = volumeId
 	cfgmap[KMasterAddr] = masterAddr
 	// FIXME
 	cfgmap[KLogDir] = "/export/Logs/cfs"
@@ -147,8 +147,9 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 			return nil, status.Error(codes.Internal, err.Error())
 		}
 	}
+	//assuming success if already unmounted
 	if notMnt {
-		return nil, status.Error(codes.NotFound, "Volume not mounted")
+		return &csi.NodeUnpublishVolumeResponse{}, nil
 	}
 
 	err = mount.New("").Unmount(req.GetTargetPath())
