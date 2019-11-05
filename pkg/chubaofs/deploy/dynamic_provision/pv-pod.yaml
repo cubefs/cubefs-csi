@@ -1,15 +1,17 @@
+#A demo container to mount chubaofs
 kind: Pod
 apiVersion: v1
 metadata:
   name: pv-pod
 spec:
-  nodeName: 10.206.7.17
+  #make sure csi node server is deployed in this node
+  nodeName: 127.0.0.1
   volumes:
-    - name: task-pv-storage
+    - name: pv-storage
       persistentVolumeClaim:
        claimName: cfs-pvc
   containers:
-    - name: task-pv-container
+    - name: pv-container
       image: nginx
       imagePullPolicy: "IfNotPresent"
       ports:
@@ -17,4 +19,4 @@ spec:
           name: "http-server"
       volumeMounts:
         - mountPath: "/usr/share/nginx/html111"
-          name: task-pv-storage
+          name: pv-storage
