@@ -51,8 +51,8 @@ const (
 )
 
 const (
-	defaultOwner        = "chubaofs"
-	defaultClientConfig = "/etc/chubaofs/fuse.json"
+	defaultOwner            = "chubaofs"
+	defaultClientConfigPath = "/etc/chubaofs/"
 )
 
 type controllerServer struct {
@@ -110,14 +110,17 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-
 	paras := req.GetParameters()
-
-	// TODO: check if parameters are valid
+	volumeName := req.GetParameters()[KVolumeName]
 
 	owner := defaultOwner
 	masterAddr := cs.masterAddress
-	volumeId := req.GetName()
+	volumeId := ""
+	if len(volumeName) == 0 {
+		volumeId = req.GetName()
+	} else {
+		volumeId = volumeName
+	}
 
 	glog.V(4).Infof("GetName:%v", req.GetName())
 	glog.V(4).Infof("GetParameters:%v", paras)

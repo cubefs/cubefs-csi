@@ -5,5 +5,12 @@ metadata:
 provisioner: chubaofs-csi-v1.0.0
 reclaimPolicy: Delete
 parameters:
-  #fsType, only support 'chubaofs' for now
+#fsType, only support 'chubaofs' for now
   fsType: chubaofs
+
+# volume name can be set in two ways:
+
+# 1 pass volume name by parameter 'volName'(not recommended)
+# volName: cfs-csi-test  (regex pattern: "^[a-zA-Z0-9_-]{3,256}$")
+
+# 2 use pv name as volume name by default(recommended)

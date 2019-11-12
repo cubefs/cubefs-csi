@@ -92,8 +92,9 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	cfgmap[KVolumeName] = volumeId
 	cfgmap[KMasterAddr] = masterAddr
 	// FIXME
-	cfgmap[KLogDir] = "/export/Logs/cfs"
-	cfgmap[KWarnLogDir] = "/export/Logs/cfs/client/warn/"
+	cfgmap[KLogDir] = "/export/Logs/"
+	//todo: ump warn log, deprecated in release version
+	cfgmap[KWarnLogDir] = "/export/Logs/client/warn/"
 	cfgmap[KLogLevel] = "error"
 	cfgmap[KOwner] = defaultOwner
 	cfgmap[KProfPort] = "10094"
@@ -112,13 +113,14 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		return nil, status.Errorf(codes.Internal, "Failed to marshal client config err(%v)", err)
 	}
 
-	if _, err = generateFile(defaultClientConfig, cfgstr); err != nil {
-		return nil, status.Errorf(codes.Internal, "Failed to generate client config file, path(%v) err(%v)", defaultClientConfig, err)
+	fuseConfigPath := defaultClientConfigPath + volumeId + "_fuse.json"
+	if _, err = generateFile(fuseConfigPath, cfgstr); err != nil {
+		return nil, status.Errorf(codes.Internal, "Failed to generate client config file, path(%v) err(%v)", fuseConfigPath, err)
 	}
 
 	glog.V(4).Infof("Parameters of cfs-client is %v", string(cfgstr))
 
-	if err = doMount("/usr/bin/cfs-client", defaultClientConfig); err != nil {
+	if err = doMount("/usr/bin/cfs-client", fuseConfigPath); err != nil {
 		return nil, status.Errorf(codes.Internal, "Failed to mount, err(%v)", err)
 	}
 
