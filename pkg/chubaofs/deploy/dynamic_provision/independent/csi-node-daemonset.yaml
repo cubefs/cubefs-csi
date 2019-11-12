@@ -73,6 +73,8 @@ spec:
             - mountPath: /export/kubelet/pods
               mountPropagation: Bidirectional
               name: mountpoint-dir
+            - mountPath: /export/Logs
+              name: log-dir
 
       volumes:
         - hostPath:
@@ -87,6 +89,10 @@ spec:
             path: /export/kubelet/pods/
             type: DirectoryOrCreate
           name: mountpoint-dir
+        - hostPath:
+            path: /export/Logs/chubaofs-node/
+            type: DirectoryOrCreate
+          name: log-dir
         - configMap:
             name: kubecfg
           name: kubecfg
