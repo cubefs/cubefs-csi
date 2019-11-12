@@ -17,7 +17,7 @@ kind: StatefulSet
 apiVersion: apps/v1
 metadata:
   name: cfscsi-controller
-  namespace: default
+  namespace: cfs
 spec:
   selector:
     matchLabels:
@@ -29,8 +29,6 @@ spec:
       labels:
         app: cfscsi-controller
     spec:
-      imagePullSecrets:
-        - name: registry-key
       serviceAccount: csi-service-account
       containers:
         - name: external-provisioner
@@ -79,7 +77,7 @@ spec:
                 fieldRef:
                   apiVersion: v1
                   fieldPath: spec.nodeName
-          image: quay.io/k8scsi/cfscsi:v1.6
+          image: quay.io/k8scsi/cfscsi:v0.3
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true

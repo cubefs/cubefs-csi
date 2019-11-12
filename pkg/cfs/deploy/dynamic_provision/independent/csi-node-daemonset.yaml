@@ -2,7 +2,7 @@ kind: DaemonSet
 apiVersion: apps/v1
 metadata:
   name: cfscsi-node
-  namespace: default
+  namespace: cfs
 spec:
   selector:
     matchLabels:
@@ -12,8 +12,6 @@ spec:
       labels:
         app: cfscsi-node
     spec:
-      imagePullSecrets:
-        - name: registry-key
       serviceAccount: csi-service-account
       containers:
         - name: driver-registrar
@@ -54,7 +52,7 @@ spec:
                 fieldRef:
                   apiVersion: v1
                   fieldPath: spec.nodeName
-          image: quay.io/k8scsi/cfscsi:v1.6
+          image: quay.io/k8scsi/cfscsi:v0.3
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
@@ -64,6 +62,8 @@ spec:
             - mountPath: /export/kubelet/pods
               mountPropagation: Bidirectional
               name: mountpoint-dir
+            - mountPath: /export/Logs
+              name: log-dir
 
       volumes:
         - hostPath:
@@ -78,6 +78,10 @@ spec:
             path: /export/kubelet/pods
             type: DirectoryOrCreate
           name: mountpoint-dir
+        - hostPath:
+            path: /export/Logs/cfs-node/
+            type: DirectoryOrCreate
+          name: log-dir
         - configMap:
             name: kubecfg
           name: kubecfg

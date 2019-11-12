@@ -5,15 +5,13 @@ clusters:
 - cluster:
     insecure-skip-tls-verify: true
     server: https://172.0.0.1:6443
-  name: cluster-auth
+  name: kubernetes-api-server
 contexts:
 - context:
-    cluster: cluster-auth
+    cluster: kubernetes-api-server
     user: kubecsi
-  name: cluster-auth
-current-context: cluster-auth
-kind: Config
-preferences: {}
+  name: cfs-csi
+current-context: cfs-csi
 users:
 - name: kubecsi
   user:

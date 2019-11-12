@@ -30,24 +30,39 @@ docker pull quay.io/k8scsi/driver-registrar:v0.3.0
 docker pull quay.io/k8scsi/csi-provisioner:v0.3.0
 ```
 
-### Build cfscsi driver image
+### Build cfscsi driver image yourself
 
-```docker build -t cfscsi:v2 deploy/.```
+```docker build -t quay.io/k8scsi/cfscsi:v0.3 deploy/.```
 
 ### Create configmap for csi driver
 
 ```kubectl create configmap kubecfg --from-file=deploy/kubernetes/kubecfg```
 
-### Deploy csi-sidecar and cfs csi-driver
+### Create RBAC rules (ServiceAccount, ClusterRole, ClusterRoleBinding) and StorageClass
+```
+kubectl apply -f deploy/dynamic_provision/cfs-rbac.yaml
+kubectl apply -f deploy/dynamic_provision/cfs-sc.yaml
+```
 
-```kubectl apply -f deploy/dynamic_provision/cfs-rbac.yaml```
-```kubectl apply -f deploy/dynamic_provision/cfs-sc.yaml```
-```kubectl apply -f deploy/dynamic_provision/cfs-pvc.yaml```
-```kubectl apply -f deploy/dynamic_provision/cfs-sidecar.yaml```
+### 1 Deploy cfs csi-driver by sidecar
+```
+kubectl apply -f deploy/dynamic_provision/sidecar/cfs-sidecar.yaml
+```
+
+### 2 Deploy cfs csi-driver by csi-controller-statefulset and csi-node-daemonset
+```
+kubectl apply -f deploy/dynamic_provision/independent/csi-controller-statefulset.yaml
+kubectl apply -f deploy/dynamic_provision/independent/csi-node-daemonset.yaml
+```
+
+### Create pvc
+```
+kubectl apply -f deploy/dynamic_provision/cfs-pvc.yaml
+```
 
 ### Pre Volume: you must know volumeName first, example Nginx application
 
-Please update the cfs Master Hosts & volumeName information in pv-pod.yaml file.
+Please update the cfs Master environment information: 'MASTER_ADDRESS' in yaml files.
 
 ### Dynamic volume: Example Nginx application
 

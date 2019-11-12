@@ -22,13 +22,15 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi/v0"
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"k8s.io/kubernetes/pkg/volume/util"
 )
 
 const (
 	KEY_VOLUME_NAME               = "volName"
 	KEY_CFS_MASTER                = "cfsMaster"
-	CFS_FUSE_CONFIG_PATH          = "/etc/cfs/fuse.json"
+	CFS_FUSE_CONFIG_PATH          = "/etc/cfs/"
 	FUSE_KEY_LOG_PATH             = "logDir"
 	FUSE_KEY_LOG_UMP_WARN_LOG_DIR = "warnLogDir"
 	FUSE_KEY_MASTER_ADDR          = "masterAddr"
@@ -61,6 +63,9 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		glog.Errorf("invalid create cfs volume req: %v", req)
 		return nil, err
 	}
+	if len(req.GetName()) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "Name missing in request")
+	}
 
 	// Volume Size - Default is 1 GiB
 	var volSizeBytes int64 = ALLOCATE_MIN_VOL_SIZE_BYTE
@@ -73,7 +78,13 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	}
 	cfsVolSizeGB := int(util.RoundUpSize(volSizeBytes, ALLOCATE_CFS_VOL_SIZE_UNIT))
 
-	volName := req.GetParameters()[KEY_VOLUME_NAME]
+	volName := ""
+	volumeName := req.GetParameters()[KEY_VOLUME_NAME]
+	if len(volumeName) == 0 {
+		volName = req.GetName()
+	} else {
+		volName = volumeName
+	}
 	masterAddress := cs.masterAddress
 	glog.V(4).Infof("GetName:%v", req.GetName())
 	glog.V(4).Infof("GetParameters:%v", req.GetParameters())
@@ -91,7 +102,6 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 			CapacityBytes: volSizeBytes,
 			Attributes: map[string]string{
 				KEY_VOLUME_NAME: volName,
-				KEY_CFS_MASTER:  masterAddress,
 			},
 		},
 	}
@@ -130,4 +140,3 @@ func (cs *controllerServer) ValidateVolumeCapabilities(ctx context.Context, req 
 	}
 	return &csi.ValidateVolumeCapabilitiesResponse{Supported: true, Message: ""}, nil
 }
-

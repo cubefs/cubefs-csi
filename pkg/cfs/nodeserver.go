@@ -67,6 +67,7 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	}
 
 	if !notMnt {
+		glog.Infof("Mount path: %s is already mounted", targetPath)
 		return &csi.NodePublishVolumeResponse{}, nil
 	}
 
@@ -76,13 +77,14 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	}
 
 	master := ns.masterAddress
-	volName := req.GetVolumeAttributes()[KEY_VOLUME_NAME]
+	volName := req.VolumeId
 
 	cfgmap := make(map[string]interface{})
 	cfgmap[FUSE_KEY_MOUNT_POINT] = targetPath
 	cfgmap[FUSE_KEY_VOLUME_NAME] = volName
 	cfgmap[FUSE_KEY_MASTER_ADDR] = master
-	cfgmap[FUSE_KEY_LOG_PATH] = "/export/Logs/cfs/client/"
+	cfgmap[FUSE_KEY_LOG_PATH] = "/export/Logs/"
+	//ump warn log, deprecated in release version
 	cfgmap[FUSE_KEY_LOG_UMP_WARN_LOG_DIR] = "/export/Logs/cfs/client/warn/"
 	cfgmap[FUSE_KEY_LOG_LEVEL] = "error"
 	cfgmap[FUSE_KEY_LOOKUP_VALID] = "30"
@@ -103,16 +105,17 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 		return &csi.NodePublishVolumeResponse{}, err
 	}
 
-	WriteBytes(CFS_FUSE_CONFIG_PATH, cfgstr)
+	fuseConfigPath := CFS_FUSE_CONFIG_PATH + volName + "_fuse.json"
+	WriteBytes(fuseConfigPath, cfgstr)
 	glog.V(4).Infof("Parameters of cfs-client is %v", string(cfgstr))
 
 	var (
 		cmdErrChan = make(chan error)
 		cmdErr     error
-		cmd        = exec.Command("/usr/bin/cfs-client", "-c", CFS_FUSE_CONFIG_PATH)
+		cmd        = exec.Command("/usr/bin/cfs-client", "-c", fuseConfigPath)
 	)
 	go func() {
-		glog.V(4).Infof("In background do /usr/bin/cfs-client -c %v", CFS_FUSE_CONFIG_PATH)
+		glog.V(4).Infof("In background do /usr/bin/cfs-client -c %v", fuseConfigPath)
 		if err := cmd.Run(); err != nil {
 			glog.Errorf("cfs client exec is failed. err:%v", err)
 			cmdErrChan <- err
@@ -145,8 +148,9 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 			return nil, status.Error(codes.Internal, err.Error())
 		}
 	}
+	//assuming success if already unmounted
 	if notMnt {
-		return nil, status.Error(codes.NotFound, "Volume not mounted")
+		return &csi.NodeUnpublishVolumeResponse{}, nil
 	}
 
 	err = util.UnmountPath(req.GetTargetPath(), mount.New(""))
