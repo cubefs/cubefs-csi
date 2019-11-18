@@ -26,8 +26,8 @@ import (
 )
 
 var (
-	endpoint string
-	nodeID   string
+	endpoint      string
+	nodeID        string
 	masterAddress string
 )
 

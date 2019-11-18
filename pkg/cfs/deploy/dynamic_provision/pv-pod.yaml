@@ -3,8 +3,8 @@ apiVersion: v1
 metadata:
   name: pv-pod
 spec:
-# make sure sidecar or csi-node-daemonset deployed on 10.206.7.17
-  nodeName: 10.206.7.17
+# make sure sidecar or csi-node-daemonset deployed on <NodeServer IP>
+  nodeName: <NodeServer IP>
   volumes:
     - name: pv-storage
       persistentVolumeClaim:

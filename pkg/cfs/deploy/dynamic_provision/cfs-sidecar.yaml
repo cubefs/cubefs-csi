@@ -7,7 +7,7 @@ metadata:
   namespace: cfs
 spec:
   serviceAccount: csi-service-account
-  nodeName: 10.206.7.17
+  nodeName: <NodeServer IP>
   containers:
   - name: external-provisioner
     args:
