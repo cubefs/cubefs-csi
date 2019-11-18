@@ -19,10 +19,17 @@ metadata:
   name: cfscsi-controller
   namespace: chubaofs
 spec:
+# add imagePullSecretes when pulling image from a self-repository
+# imagePullSecretes:
+#   - name: registry-key
   selector:
     matchLabels:
       app: cfscsi-controller
   serviceName: "cfscsi-controller"
+# add labels to k8s nodes:
+# 'kubectl label nodes <ControllerServer IP> csi-role=controller'
+  nodeSelector:
+    csi-role: controller
   replicas: 1
   template:
     metadata:
@@ -80,7 +87,7 @@ spec:
                 fieldRef:
                   apiVersion: v1
                   fieldPath: spec.nodeName
-          image: quay.io/k8scsi/cfscsi:v1.0.0
+          image: docker.io/chubaofs/cfscsi:v1.0.0
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true

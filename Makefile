@@ -12,26 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-REGISTRY_NAME=quay.io/k8scsi
+REGISTRY_NAME=docker.io/chubaofs
 IMAGE_NAME=cfscsi
-IMAGE_VERSION=v2
+IMAGE_VERSION=v1.0.0
 IMAGE_TAG=$(REGISTRY_NAME)/$(IMAGE_NAME):$(IMAGE_VERSION)
 REV=$(shell git describe --long --tags --dirty)
 
-.PHONY: all cfs clean cfs-container
+.PHONY: all cfs-build clean cfs-image
 
-all: cfs 
+all: cfs-build
 
-test:
-	go test github.com/kubernetes-csi/drivers/pkg/... -cover
-	go vet github.com/kubernetes-csi/drivers/pkg/...
-cfs:
+cfs-build:
 	if [ ! -d ./vendor ]; then dep ensure -vendor-only; fi
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o _output/cfsplugin ./cmd/chubaofsplugin
-cfs-container: cfs
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o _output/cfsplugin ./cmd/chubaofsplugin; \
+    mv ./_output/cfsplugin ./pkg/chubaofs/deploy/
+cfs-image: cfs-build
 	docker build -t $(IMAGE_TAG) ./pkg/chubaofs/deploy/.
-push: cfs-container
+push: cfs-image
 	docker push $(IMAGE_TAG)
 clean:
 	go clean -r -x
-	-rm -rf _output
+	-rm -rf _output/*
