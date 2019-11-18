@@ -1,19 +1,21 @@
+# kubeconfig file to connect with api-server
 apiVersion: v1
 kind: Config
 preferences: {}
 clusters:
 - cluster:
     insecure-skip-tls-verify: true
+    # api-server address
     server: https://172.0.0.1:6443
-  name: cluster-auth
+  name: kubernetes-api-server
 contexts:
 - context:
-    cluster: cluster-auth
+    cluster: kubernetes-api-server
     user: kubecsi
-  name: cluster-auth
-current-context: cluster-auth
+  name: cfs-csi
+current-context: cfs-csi
 users:
 - name: kubecsi
   user:
     password: *****
-    username: cfs
+    username: ***

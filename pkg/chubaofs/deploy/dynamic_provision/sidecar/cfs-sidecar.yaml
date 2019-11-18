@@ -8,7 +8,8 @@ metadata:
   namespace: chubaofs
 spec:
   serviceAccount: csi-service-account
-  nodeName: 10.206.7.17
+  # make sure sidecar or csi-node-daemonset deployed on <NodeServer IP>
+  nodeName: <NodeServer IP>
   containers:
   - name: external-provisioner
     args:

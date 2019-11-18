@@ -12,7 +12,14 @@ spec:
       labels:
         app: cfscsi-node
     spec:
+# add imagePullSecretes when pulling image from a self-repository
+#     imagePullSecretes:
+#       - name: registry-key
       serviceAccount: csi-service-account
+# add labels to k8s nodes:
+# 'kubectl label nodes <NodeServer IP> csi-role=node'
+      nodeSelector:
+        csi-role: node
       containers:
         - name: driver-registrar
           args:
@@ -63,7 +70,7 @@ spec:
                 fieldRef:
                   apiVersion: v1
                   fieldPath: spec.nodeName
-          image: quay.io/k8scsi/cfscsi:v1.0.0
+          image: docker.io/chubaofs/cfscsi:v1.0.0
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true

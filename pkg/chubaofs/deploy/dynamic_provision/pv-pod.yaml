@@ -1,11 +1,11 @@
-#A demo container to mount chubaofs
+# A demo container to mount chubaofs
 kind: Pod
 apiVersion: v1
 metadata:
   name: pv-pod
 spec:
-  #make sure csi node server is deployed in this node
-  nodeName: 127.0.0.1
+  # make sure csi node server is deployed in this node
+  nodeName: <NodeServer IP>
   volumes:
     - name: pv-storage
       persistentVolumeClaim:
