@@ -1,0 +1,116 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: chubaofs-csi-node-account
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: chubaofs-csi-node-role-binding
+subjects:
+  - kind: ServiceAccount
+    name: chubaofs-csi-node-account
+    namespace: default
+roleRef:
+  kind: ClusterRole
+  name: chubaofs-csi-node-role
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: chubaofs-csi-node-role
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "update"]
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattachments"]
+    verbs: ["get", "list", "watch", "update"]
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: chubaofs-csi-node
+spec:
+  selector:
+    matchLabels:
+      app: chubaofs-csi-node
+  template:
+    metadata:
+      labels:
+        app: chubaofs-csi-node
+    spec:
+      serviceAccountName: chubaofs-csi-node-account
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: node-driver-registrar
+          image: quay.io/k8scsi/csi-node-driver-registrar:v1.1.0
+          args:
+            - "--csi-address=/csi/chubaofs-csi.sock"
+            - "--kubelet-registration-path=/var/lib/kubelet/plugins/csi.chubaofs.com/chubaofs-csi.sock"
+          env:
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - name: registration-dir
+              mountPath: /registration
+            - name: socket-dir
+              mountPath: /csi
+        - name: node
+          image: chubaofs/cfs-csi-driver:1.0.0
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+          args:
+            - "--v=5"
+            - "--endpoint=unix:///csi/chubaofs-csi.sock"
+            - "--nodeid=$(NODE_ID)"
+            - "--drivername=csi.chubaofs.com"
+          lifecycle:
+            preStop:
+              exec:
+                command: [
+                  "/bin/sh",
+                  "-c",
+                  "rm -rf /csi/chubaofs-csi.sock /registration/csi.chubaofs.com-reg.sock"
+                ]
+          env:
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - name: registration-dir
+              mountPath: /registration
+            - name: socket-dir
+              mountPath: /csi
+            - name: mountpoint-dir
+              mountPath: /var/lib/kubelet/pods
+              mountPropagation: Bidirectional
+      volumes:
+        - name: socket-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins/csi.chubaofs.com
+            type: DirectoryOrCreate
+        - name: registration-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins_registry
+            type: Directory
+        - name: mountpoint-dir
+          hostPath:
+            path: /var/lib/kubelet/pods
+            type: Directory

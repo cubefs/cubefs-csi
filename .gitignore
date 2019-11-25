@@ -1,0 +1,8 @@
+# build directory
+build/bin/cfs-csi-driver
+build/bin/cfs-client
+.idea
+# git merge files
+*.orig
+*.patch
+*.rej

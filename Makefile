@@ -1,35 +1,19 @@
-# Copyright 2017 The Kubernetes Authors.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# ChubaoFS CSI Makefile
 
-REGISTRY_NAME=docker.io/chubaofs
-IMAGE_NAME=cfscsi
-IMAGE_VERSION=v1.0.0
-IMAGE_TAG=$(REGISTRY_NAME)/$(IMAGE_NAME):$(IMAGE_VERSION)
-REV=$(shell git describe --long --tags --dirty)
+IMAGE_TAG=chubaofs/cfs-csi-driver:1.0.0
 
-.PHONY: all cfs-build clean cfs-image
+.PHONY: all build image push clean
 
-all: cfs-build
+all: build
 
-cfs-build:
-	if [ ! -d ./vendor ]; then dep ensure -vendor-only; fi
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o _output/cfsplugin ./cmd/chubaofsplugin; \
-    mv ./_output/cfsplugin ./pkg/chubaofs/deploy/
-cfs-image: cfs-build
-	docker build -t $(IMAGE_TAG) ./pkg/chubaofs/deploy/.
-push: cfs-image
-	docker push $(IMAGE_TAG)
+# dep ensure -vendor-only
+build:
+	@{ cd build; ./build_cfs_client.sh; }
+	@{ cd build; ./build_cfs_node_driver.sh; }
+
+image: build
+	@docker build -t $(IMAGE_TAG) ./build
+push: image
+	@docker push $(IMAGE_TAG)
 clean:
-	go clean -r -x
-	-rm -rf _output/*
+	@rm -rf build/bin

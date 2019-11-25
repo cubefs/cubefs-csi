@@ -1,0 +1,162 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: chubaofs-csi-controller-account
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: chubaofs-csi-controller-role-binding
+subjects:
+  - kind: ServiceAccount
+    name: chubaofs-csi-controller-account
+    namespace: default
+roleRef:
+  kind: ClusterRole
+  name: chubaofs-csi-controller-role
+  apiGroup: rbac.authorization.k8s.io
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: chubaofs-csi-controller-role
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["csi.storage.k8s.io"]
+    resources: ["csinodeinfos"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattachments"]
+    verbs: ["get", "list", "watch", "update"]
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  # replace with non-default namespace name
+  namespace: default
+  name: chubaofs-external-provisioner-cfg
+rules:
+  - apiGroups: [""]
+    resources: ["endpoints"]
+    verbs: ["get", "watch", "list", "delete", "update", "create"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "create", "delete"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "watch", "list", "delete", "update", "create"]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: chubaofs-csi-controller-account-role-cfg
+  # replace with non-default namespace name
+  namespace: default
+subjects:
+  - kind: ServiceAccount
+    name: chubaofs-csi-controller-account
+    # replace with non-default namespace name
+    namespace: default
+roleRef:
+  kind: Role
+  name: chubaofs-external-provisioner-cfg
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chubaofs-csi-controller
+spec:
+  selector:
+    matchLabels:
+      app: chubaofs-csi-controller
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: chubaofs-csi-controller
+    spec:
+      serviceAccountName: chubaofs-csi-controller-account
+      containers:
+        - name: csi-provisioner
+          image: quay.io/k8scsi/csi-provisioner:v1.3.0
+          imagePullPolicy: "IfNotPresent"
+          args:
+            - "--csi-address=/csi/chubaofs-provisioner.sock"
+            - "--timeout=150s"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+        - name: csi-attacher
+          image: quay.io/k8scsi/csi-attacher:v1.2.0
+          imagePullPolicy: "IfNotPresent"
+          args:
+            - "--csi-address=/csi/chubaofs-provisioner.sock"
+            - "leader-election=true"
+            - "--leader-election-type=leases"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+        - name: controller
+          image: chubaofs/cfs-csi-driver:1.0.0
+          imagePullPolicy: "IfNotPresent"
+          securityContext:
+            privileged: true
+            capabilities:
+              add: ["SYS_ADMIN"]
+          args:
+            - "--v=5"
+            - "--endpoint=unix:///csi/chubaofs-provisioner.sock"
+            - "--nodeid=$(NODE_ID)"
+            - "--drivername=csi.chubaofs.com"
+          lifecycle:
+            preStop:
+              exec:
+                command: [
+                  "/bin/sh",
+                  "-c",
+                  "rm -rf /csi/chubaofs-provisioner.sock"
+                ]
+          env:
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+      volumes:
+        - name: socket-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins/csi.chubaofs.com
+            type: DirectoryOrCreate
+
+
+
+
+
+
+
+
+
+
+
+
