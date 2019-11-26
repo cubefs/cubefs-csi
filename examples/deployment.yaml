@@ -1,0 +1,31 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chubaofs-csi-demo
+  labels:
+    app: chubaofs-csi-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chubaofs-csi-demo-pod
+  template:
+    metadata:
+      labels:
+        app: chubaofs-csi-demo-pod
+    spec:
+      containers:
+        - name: chubaofs-csi-demo
+          image: nginx
+          imagePullPolicy: "IfNotPresent"
+          ports:
+            - containerPort: 80
+              name: "http-server"
+          volumeMounts:
+            - mountPath: "/usr/share/nginx/html"
+              name: mypvc
+      volumes:
+        - name: mypvc
+          persistentVolumeClaim:
+            claimName: chubaofs-pvc
