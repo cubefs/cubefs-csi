@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: cfs-pvc-share-volume
+  namespace: default
+spec:
+  accessModes:
+  - ReadWriteMany
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: cfs-sc-share-volume
+#  volumeName: testVol

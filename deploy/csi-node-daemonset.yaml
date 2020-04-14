@@ -1,116 +1,95 @@
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: chubaofs-csi-node-account
----
-kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: chubaofs-csi-node-role-binding
-subjects:
-  - kind: ServiceAccount
-    name: chubaofs-csi-node-account
-    namespace: default
-roleRef:
-  kind: ClusterRole
-  name: chubaofs-csi-node-role
-  apiGroup: rbac.authorization.k8s.io
----
-kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: chubaofs-csi-node-role
-rules:
-  - apiGroups: [""]
-    resources: ["configmaps"]
-    verbs: ["get", "list"]
-  - apiGroups: [""]
-    resources: ["nodes"]
-    verbs: ["get", "list", "update"]
-  - apiGroups: [""]
-    resources: ["namespaces"]
-    verbs: ["get", "list"]
-  - apiGroups: [""]
-    resources: ["persistentvolumes"]
-    verbs: ["get", "list", "watch", "update"]
-  - apiGroups: ["storage.k8s.io"]
-    resources: ["volumeattachments"]
-    verbs: ["get", "list", "watch", "update"]
----
-apiVersion: apps/v1
 kind: DaemonSet
+apiVersion: apps/v1
 metadata:
-  name: chubaofs-csi-node
+  name: cfs-csi-node
+  namespace: default
 spec:
   selector:
     matchLabels:
-      app: chubaofs-csi-node
+      app: cfs-csi-node
   template:
     metadata:
       labels:
-        app: chubaofs-csi-node
-    spec:
-      serviceAccountName: chubaofs-csi-node-account
-      hostNetwork: true
-      dnsPolicy: ClusterFirstWithHostNet
+        app: cfs-csi-node
+    spec: 
+      serviceAccount: cfs-csi-service-account
+      nodeSelector:
+        csi.chubaofs.com/node: enabled
       containers:
-        - name: node-driver-registrar
-          image: quay.io/k8scsi/csi-node-driver-registrar:v1.1.0
-          args:
-            - "--csi-address=/csi/chubaofs-csi.sock"
-            - "--kubelet-registration-path=/var/lib/kubelet/plugins/csi.chubaofs.com/chubaofs-csi.sock"
-          env:
-            - name: KUBE_NODE_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: spec.nodeName
-          volumeMounts:
-            - name: registration-dir
-              mountPath: /registration
-            - name: socket-dir
-              mountPath: /csi
-        - name: node
-          image: chubaofs/cfs-csi-driver:1.0.0
+        - name: driver-registrar
+          image: quay.io/k8scsi/driver-registrar:v0.4.2
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
           args:
             - "--v=5"
-            - "--endpoint=unix:///csi/chubaofs-csi.sock"
-            - "--nodeid=$(NODE_ID)"
-            - "--drivername=csi.chubaofs.com"
-          lifecycle:
-            preStop:
-              exec:
-                command: [
-                  "/bin/sh",
-                  "-c",
-                  "rm -rf /csi/chubaofs-csi.sock /registration/csi.chubaofs.com-reg.sock"
-                ]
+            - "--csi-address=$(ADDRESS)"
+            - "--kubelet-registration-path=$(DRIVER_REG_SOCK_PATH)"
           env:
-            - name: NODE_ID
+            - name: ADDRESS
+              value: /var/lib/kubelet/plugins/csi.chubaofs.com/csi.sock
+            - name: DRIVER_REG_SOCK_PATH
+              value: /var/lib/kubelet/plugins/csi.chubaofs.com/csi.sock
+            - name: KUBE_NODE_NAME
               valueFrom:
                 fieldRef:
+                  apiVersion: v1
                   fieldPath: spec.nodeName
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+#            limits:
+#              cpu: 500m
+#              memory: 512Mi
           volumeMounts:
-            - name: registration-dir
-              mountPath: /registration
-            - name: socket-dir
-              mountPath: /csi
-            - name: mountpoint-dir
-              mountPath: /var/lib/kubelet/pods
+            - mountPath: /var/lib/kubelet/plugins/csi.chubaofs.com
+              name: socket-dir
+            - mountPath: /registration
+              name: registration-dir
+        - name: cfs-driver
+          image: 10.196.31.173:5000/chubaofs/cfs-csi-driver:2.0.7
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+          command: ["/bin/bash", "/cfs/bin/start.sh"]
+          env:
+            - name: LOG_LEVEL
+              value: "5"
+            - name: CSI_ENDPOINT
+              value: unix:///var/lib/kubelet/plugins/csi.chubaofs.com/csi.sock
+            - name: DRIVER_NAME
+              value: csi.chubaofs.com
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.nodeName
+          resources:
+            requests:
+              cpu: 1000m
+              memory: 2Gi
+#            limits:
+#              cpu: 2000m
+#              memory: 16Gi
+          volumeMounts:
+            - mountPath: /var/lib/kubelet/plugins/csi.chubaofs.com
+              name: socket-dir
+            - mountPath: /var/lib/kubelet/pods
               mountPropagation: Bidirectional
+              name: mountpoint-dir
+
       volumes:
-        - name: socket-dir
-          hostPath:
+        - hostPath:
             path: /var/lib/kubelet/plugins/csi.chubaofs.com
             type: DirectoryOrCreate
-        - name: registration-dir
-          hostPath:
-            path: /var/lib/kubelet/plugins_registry
+          name: socket-dir
+        - hostPath:
+            path: /var/lib/kubelet/plugins/
             type: Directory
-        - name: mountpoint-dir
-          hostPath:
+          name: registration-dir
+        - hostPath:
             path: /var/lib/kubelet/pods
             type: Directory
+          name: mountpoint-dir
+
