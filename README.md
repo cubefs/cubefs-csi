@@ -91,7 +91,6 @@ The field `storageClassName` refers to the StorageClass we already created.
 The example `deployment.yaml` looks like below.
 
 ```yaml
-...
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -121,7 +120,6 @@ spec:
         - name: mypvc
           persistentVolumeClaim:
             claimName: cfs-pvc
-...
 ```
 
 The field `claimName` refers to the PVC created before.

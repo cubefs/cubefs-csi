@@ -18,7 +18,7 @@ spec:
 #      imagePullSecrets:
 #        - name: registry-key
       containers:
-        - name: chubaofs-csi-demo
+        - name: cfs-csi-demo
           image: nginx:1.17.9
           imagePullPolicy: "IfNotPresent"
           ports:
