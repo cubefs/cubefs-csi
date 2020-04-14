@@ -1,9 +1,12 @@
-# ChubaoFS CSI
+# Overview
+
+ChubaoFS Container Storage Interface (CSI) plugins.
 
 ## Prerequisite
 
-* Kubernetes 1.16.0
-* ChubaoFS 1.4.0
+* Kubernetes 1.12.5
+* ChubaoFS 2.0.0
+* CSI spec version 0.3.0.
 
 ## Enable privileged Pods
 
@@ -14,103 +17,114 @@ $ ./kube-apiserver ...  --allow-privileged=true ...
 $ ./kubelet ...  --allow-privileged=true ...
 ```
 
-Note: Starting from Kubernetes 1.13.0, --allow-privileged is true for kubelet. It'll be deprecated in future kubernetes releases. Please refer to [Kubernetes CSI Deploy](https://kubernetes-csi.github.io/docs/deploying.html) for more details.
-
 ## Prepare on-premise ChubaoFS cluster
 
-An on-premise ChubaoFS cluster can be deployed seperately, or within the same Kubernetes cluster as applications which requrie persistent volumes. Please refer to [chubaofs-helm](https://github.com/chubaofs/chubaofs-helm) for more details on deployment using Helm.
+An on-premise ChubaoFS cluster can be deployed separately, or within the same Kubernetes cluster as applications which requrie persistent volumes. Please refer to [chubaofs-helm](https://github.com/chubaofs/chubaofs-helm) for more details on deployment using Helm.
 
 ## Deploy the CSI driver
 
 ```
+$ kubectl create configmap kubecfg --from-file=deploy/kubecfg```
+$ kubectl apply -f deploy/csi-rbac.yaml
 $ kubectl apply -f deploy/csi-controller-deployment.yaml
 $ kubectl apply -f deploy/csi-node-daemonset.yaml
 ```
-## Connect Pod to ChubaoFS cluster
+## Use Remote ChubaoFS Cluster as backend storage
 
-There are several abstraction layers between Pods and on-premise ChubaoFS cluster, and we are going to establish the connection through following steps for a Pod to use ChubaoFS as its backend storage.
+There is only 3 steps before finally using remote ChubaoFS cluster as file system
 
 1. Create StorageClass
 2. Create PVC (Persistent Volume Claim)
-3. Refer to a PVC in Pod
+3. Reference PVC in a Pod
 
 ### Create StorageClass
 
-An example storage class yaml file looks like below.
+An example storage class yaml file is shown below.
 
 ```yaml
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
-  name: chubaofs-sc
+  name: cfs-sc
 provisioner: csi.chubaofs.com
 reclaimPolicy: Delete
 parameters:
-  masterAddr: "master-service.chubaofs.svc.cluster.local:8080"
-  owner: "csi-user"
+  masterAddr: "master-service.chubaofs.svc.cluster.local:17010"
   consulAddr: "consul-service.chubaofs.svc.cluster.local:8500"
+  owner: "csiuser"
   logLevel: "debug"
 ```
 
-Use the following command to create.
+Creating command.
 
 ```
-$ kubectl create -f ~/storageclass-chubaofs.yaml
+$ kubectl create -f deploy/storageclass.yaml
 ```
-
-The field `provisioner` indicates name of the CSI driver, which is `csi.chubaofs.com` in this example. It is connected to the `drivername` in `deploy/csi-controller-deployment.yaml` and `deploy/csi-node-daemonset.yaml`. So StorageClass knows which driver should be used to manipulate the backend storage cluster.
-
-| Name       | Madotory | Description|
-| :--------- | :------: | ---------: |
-| MasterAddr | Y | Master address of a specific on-premise ChubaoFS cluster |
-| consulAddr | N | |
-
 
 ### Create PVC
 
-An example pvc yaml file looks like below.
+An example pvc yaml file is shown below.
 
 ```yaml
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: chubaofs-pvc
+  name: cfs-pvc
 spec:
   accessModes:
-    - ReadWriteOnce
+  - ReadWriteMany
+  volumeMode: Filesystem
   resources:
     requests:
       storage: 5Gi
-  storageClassName: chubaofs-sc
+  storageClassName: cfs-sc
 ```
 
 ```
-$ kubectl create -f ~/pvc.yaml
+$ kubectl create -f example/pvc.yaml
 ```
 
 The field `storageClassName` refers to the StorageClass we already created.
 
 ### Use PVC in a Pod
 
-The example `nginx-deployment.yaml` looks like below.
+The example `deployment.yaml` looks like below.
 
 ```yaml
 ...
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cfs-csi-demo
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cfs-csi-demo-pod
+  template:
+    metadata:
+      labels:
+        app: cfs-csi-demo-pod
     spec:
       containers:
-        - name: csi-demo
-          image: alpine:3.10.3
+        - name: chubaofs-csi-demo
+          image: nginx:1.17.9
+          imagePullPolicy: "IfNotPresent"
+          ports:
+            - containerPort: 80
+              name: "http-server"
           volumeMounts:
-            - name: mypvc
-              mountPath: /data
+            - mountPath: "/usr/share/nginx/html"
+              name: mypvc
       volumes:
         - name: mypvc
           persistentVolumeClaim:
-            claimName: chubaofs-pvc
+            claimName: cfs-pvc
 ...
 ```
 
-The field `claimName` refers to the PVC we already created.
+The field `claimName` refers to the PVC created before.
 ```
-$ kubectl create -f ~/nginx-deployment.yaml
+$ kubectl create -f examples/deployment.yaml.yaml
 ```

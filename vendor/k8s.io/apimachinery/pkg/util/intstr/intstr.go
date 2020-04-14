@@ -25,8 +25,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/golang/glog"
 	"github.com/google/gofuzz"
-	"k8s.io/klog"
 )
 
 // IntOrString is a type that can hold an int32 or a string.  When used in
@@ -45,7 +45,7 @@ type IntOrString struct {
 }
 
 // Type represents the stored type of IntOrString.
-type Type int64
+type Type int
 
 const (
 	Int    Type = iota // The IntOrString holds an int.
@@ -58,7 +58,7 @@ const (
 // TODO: convert to (val int32)
 func FromInt(val int) IntOrString {
 	if val > math.MaxInt32 || val < math.MinInt32 {
-		klog.Errorf("value: %d overflows int32\n%s\n", val, debug.Stack())
+		glog.Errorf("value: %d overflows int32\n%s\n", val, debug.Stack())
 	}
 	return IntOrString{Type: Int, IntVal: int32(val)}
 }
@@ -122,11 +122,11 @@ func (intstr IntOrString) MarshalJSON() ([]byte, error) {
 // the OpenAPI spec of this type.
 //
 // See: https://github.com/kubernetes/kube-openapi/tree/master/pkg/generators
-func (IntOrString) OpenAPISchemaType() []string { return []string{"string"} }
+func (_ IntOrString) OpenAPISchemaType() []string { return []string{"string"} }
 
 // OpenAPISchemaFormat is used by the kube-openapi generator when constructing
 // the OpenAPI spec of this type.
-func (IntOrString) OpenAPISchemaFormat() string { return "int-or-string" }
+func (_ IntOrString) OpenAPISchemaFormat() string { return "int-or-string" }
 
 func (intstr *IntOrString) Fuzz(c fuzz.Continue) {
 	if intstr == nil {

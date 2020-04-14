@@ -1,23 +1,25 @@
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: chubaofs-csi-demo
-  labels:
-    app: chubaofs-csi-demo
+  name: cfs-csi-demo
+  namespace: default
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: chubaofs-csi-demo-pod
+      app: cfs-csi-demo-pod
   template:
     metadata:
       labels:
-        app: chubaofs-csi-demo-pod
+        app: cfs-csi-demo-pod
     spec:
+      nodeSelector:
+        csi.chubaofs.com/demo: enable
+#      imagePullSecrets:
+#        - name: registry-key
       containers:
         - name: chubaofs-csi-demo
-          image: nginx
+          image: nginx:1.17.9
           imagePullPolicy: "IfNotPresent"
           ports:
             - containerPort: 80
@@ -28,4 +30,4 @@ spec:
       volumes:
         - name: mypvc
           persistentVolumeClaim:
-            claimName: chubaofs-pvc
+            claimName: cfs-pvc

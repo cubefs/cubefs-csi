@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cfs-csi-demo-share-volume
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cfs-csi-demo-pod
+  template:
+    metadata:
+      labels:
+        app: cfs-csi-demo-pod
+    spec:
+      nodeSelector:
+        csi.chubaofs.com/demo: enable
+#      imagePullSecrets:
+#        - name: registry-key
+      containers:
+        - name: chubaofs-csi-demo
+          image: nginx:1.17.9
+          imagePullPolicy: "IfNotPresent"
+          ports:
+            - containerPort: 80
+              name: "http-server"
+          volumeMounts:
+            - mountPath: "/usr/share/nginx/html"
+              name: mypvc
+      volumes:
+        - name: mypvc
+          persistentVolumeClaim:
+            claimName: cfs-pvc-share-volume

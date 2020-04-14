@@ -1,12 +1,13 @@
----
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: chubaofs-pvc
+  name: cfs-pvc
+  namespace: default
 spec:
   accessModes:
-    - ReadWriteOnce
+  - ReadWriteMany
+  volumeMode: Filesystem
   resources:
     requests:
       storage: 5Gi
-  storageClassName: chubaofs-sc
+  storageClassName: cfs-sc
