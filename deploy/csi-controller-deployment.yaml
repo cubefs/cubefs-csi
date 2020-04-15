@@ -64,11 +64,19 @@ spec:
             - name: kube-config
               mountPath: /etc/kubernetes
         - name: cfs-driver
-          image: 10.196.31.173:5000/chubaofs/cfs-csi-driver:2.0.9
+          image: chubaofs/cfs-csi-driver:2.0.8
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
-          command: ["/bin/bash", "/cfs/bin/start.sh"]
+          command:
+            - /bin/tini
+            - "--"
+            - bash
+            - "-c"
+            - |-
+              set -e
+              su -p -s /bin/bash -c "/cfs/bin/start.sh &"
+              su -p -s /bin/bash -c "sleep 9999999d"
           env:
             - name: KUBE_CONFIG
               value: /etc/kubernetes/config
