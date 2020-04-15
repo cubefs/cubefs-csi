@@ -101,3 +101,14 @@ func substr(s string, pos, length int) string {
 func getParentDirectory(dirctory string) string {
 	return substr(dirctory, 0, strings.LastIndex(dirctory, "/"))
 }
+
+func pathExists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return false, err
+}

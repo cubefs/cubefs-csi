@@ -11,7 +11,7 @@ spec:
     metadata:
       labels:
         app: cfs-csi-node
-    spec: 
+    spec:
       serviceAccount: cfs-csi-service-account
       nodeSelector:
         csi.chubaofs.com/node: enabled
@@ -22,9 +22,10 @@ spec:
           securityContext:
             privileged: true
           args:
-            - "--v=5"
-            - "--csi-address=$(ADDRESS)"
-            - "--kubelet-registration-path=$(DRIVER_REG_SOCK_PATH)"
+            - --v=5
+            - --csi-address=$(ADDRESS)
+            - --kubelet-registration-path=$(DRIVER_REG_SOCK_PATH)
+            - --kubeconfig=/etc/kubernetes/config
           env:
             - name: ADDRESS
               value: /var/lib/kubelet/plugins/csi.chubaofs.com/csi.sock
@@ -39,21 +40,22 @@ spec:
             requests:
               cpu: 200m
               memory: 256Mi
-#            limits:
-#              cpu: 500m
-#              memory: 512Mi
           volumeMounts:
             - mountPath: /var/lib/kubelet/plugins/csi.chubaofs.com
               name: socket-dir
             - mountPath: /registration
               name: registration-dir
+            - name: kube-config
+              mountPath: /etc/kubernetes
         - name: cfs-driver
-          image: 10.196.31.173:5000/chubaofs/cfs-csi-driver:2.0.8
+          image: 10.196.31.173:5000/chubaofs/cfs-csi-driver:2.0.9
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
           command: ["/bin/bash", "/cfs/bin/start.sh"]
           env:
+            - name: KUBE_CONFIG
+              value: /etc/kubernetes/config
             - name: LOG_LEVEL
               value: "5"
             - name: CSI_ENDPOINT
@@ -69,16 +71,14 @@ spec:
             requests:
               cpu: 1000m
               memory: 2Gi
-#            limits:
-#              cpu: 2000m
-#              memory: 16Gi
           volumeMounts:
             - mountPath: /var/lib/kubelet/plugins/csi.chubaofs.com
               name: socket-dir
             - mountPath: /var/lib/kubelet/pods
               mountPropagation: Bidirectional
               name: mountpoint-dir
-
+            - name: kube-config
+              mountPath: /etc/kubernetes
       volumes:
         - hostPath:
             path: /var/lib/kubelet/plugins/csi.chubaofs.com
@@ -92,4 +92,6 @@ spec:
             path: /var/lib/kubelet/pods
             type: Directory
           name: mountpoint-dir
-
+        - configMap:
+            name: csi-kube-config
+          name: kube-config

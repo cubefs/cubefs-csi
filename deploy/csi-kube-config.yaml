@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: csi-kube-config
+  namespace: default
+data:
+  config: |+
+    apiVersion: v1
+    clusters:
+    - cluster:
+        insecure-skip-tls-verify: true
+        server: https://172.22.162.29:6443
+      name: cluster-auth
+    contexts:
+    - context:
+        cluster: cluster-auth
+        namespace: cfs
+        user: cluster-auth
+      name: cluster-auth
+    current-context: cluster-auth
+    kind: Config
+    preferences: {}
+    users:
+    - name: cluster-auth
+      user:
+        password: 9V53mry7uNeQZF8fAcgVQg==
+        username: cfs
+
