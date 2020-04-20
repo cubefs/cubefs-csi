@@ -26,10 +26,11 @@ import (
 )
 
 var (
-	endpoint      string
-	nodeID        string
-	driverName    string
-	version       = "1.0.0"
+	endpoint   string
+	nodeID     string
+	driverName string
+	version    = "1.0.0"
+	kubeconfig string
 )
 
 func init() {
@@ -52,6 +53,7 @@ func main() {
 	cmd.PersistentFlags().StringVar(&endpoint, "endpoint", "unix:///csi/csi.sock", "CSI endpoint, must be a UNIX socket")
 	cmd.PersistentFlags().StringVar(&driverName, "drivername", "csi.chubaofs.com", "name of the driver (Kubernetes: `provisioner` field in StorageClass must correspond to this value)")
 	cmd.PersistentFlags().StringVar(&version, "version", "1.0.0", "Driver version")
+	cmd.PersistentFlags().StringVar(&kubeconfig, "kubeconfig", "", "Kubernetes config")
 
 	if err := cmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "%s", err.Error())
@@ -62,7 +64,7 @@ func main() {
 }
 
 func handle() {
-	d, err := chubaofs.NewDriver(driverName, version, nodeID)
+	d, err := chubaofs.NewDriver(driverName, version, nodeID, kubeconfig)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "%v", err)
 		os.Exit(1)

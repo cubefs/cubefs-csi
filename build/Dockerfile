@@ -4,4 +4,5 @@ RUN curl -o /etc/yum.repos.d/epel-7.repo http://mirrors.aliyun.com/repo/epel-7.r
 RUN mkdir -p /cfs/bin /cfs/conf /cfs/logs
 ADD bin/cfs-client /cfs/bin
 ADD bin/cfs-csi-driver /cfs/bin
+ADD tini /bin
 ADD start.sh /cfs/bin

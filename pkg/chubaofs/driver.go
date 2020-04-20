@@ -27,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 type driver struct {
@@ -41,7 +42,7 @@ type driver struct {
 	clientSet *kubernetes.Clientset
 }
 
-func NewDriver(driverName, version, nodeID string) (*driver, error) {
+func NewDriver(driverName, version, nodeID, kubeconfig string) (*driver, error) {
 	glog.Infof("driverName:%v, version:%v, nodeID:%v", driverName, version, nodeID)
 
 	csiDriver := csicommon.NewCSIDriver(driverName, version, nodeID)
@@ -61,8 +62,9 @@ func NewDriver(driverName, version, nodeID string) (*driver, error) {
 			csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER,
 		})
 
-	clientSet, err := initClientSet()
+	clientSet, err := initClientSet(kubeconfig)
 	if err != nil {
+		glog.Errorf("init client-go Clientset fail. kubeconfig:%v, err:%v", kubeconfig, err)
 		return nil, err
 	}
 
@@ -72,15 +74,23 @@ func NewDriver(driverName, version, nodeID string) (*driver, error) {
 	}, nil
 }
 
-func initClientSet() (*kubernetes.Clientset, error) {
-	// creates the in-cluster config
-	clusterConfig, err := rest.InClusterConfig()
+func initClientSet(kubeconfig string) (*kubernetes.Clientset, error) {
+	var config *rest.Config
+	var err error
+	exists, _ := pathExists(kubeconfig)
+	if exists {
+		// creates the out-of-cluster config
+		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+	} else {
+		// creates the in-cluster config
+		config, err = rest.InClusterConfig()
+	}
+
 	if err != nil {
 		return nil, err
 	}
 
-	// creates the clientSet
-	return kubernetes.NewForConfig(clusterConfig)
+	return kubernetes.NewForConfig(config)
 }
 
 func NewControllerServer(d *driver) *controllerServer {
