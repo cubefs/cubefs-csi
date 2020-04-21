@@ -193,7 +193,7 @@ func (cs *cfsServer) createVolume(capacityGB int64) error {
 
 	if resp.Code != 0 {
 		if resp.Code == 1 {
-			glog.Warning("duplicate to create volume. url(%v) code=1 msg:%v", url, resp.Msg)
+			glog.Warningf("duplicate to create volume. url(%v) code=1 msg:%v", url, resp.Msg)
 		} else {
 			glog.Errorf("create volume is failed. url(%v) code=(%v), msg:%v", url, resp.Code, resp.Msg)
 			return fmt.Errorf("create volume is failed")
@@ -218,7 +218,7 @@ func (cs *cfsServer) deleteVolume() error {
 
 	if resp.Code != 0 {
 		if resp.Code == 7 {
-			glog.Warning("volume not exists, assuming the volume has already been deleted. code:%v, msg:%v", resp.Code, resp.Msg)
+			glog.Warningf("volume not exists, assuming the volume has already been deleted. code:%v, msg:%v", resp.Code, resp.Msg)
 		} else {
 			glog.Errorf("delete volume is failed. code:%v, msg:%v", resp.Code, resp.Msg)
 			return fmt.Errorf("delete volume is failed")

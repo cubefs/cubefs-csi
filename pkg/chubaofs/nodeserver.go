@@ -19,6 +19,7 @@ package chubaofs
 import (
 	"github.com/chubaofs/chubaofs-csi/pkg/csi-common"
 	"github.com/container-storage-interface/spec/lib/go/csi/v0"
+	"github.com/golang/glog"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -63,12 +64,8 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	defer ns.mutex.Unlock()
 	targetPath := req.GetTargetPath()
 	hasMount, err := isMountPoint(targetPath)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "check isMountPoint[%v] error: %v", targetPath, err)
-	}
-
-	if !hasMount {
-		// already umount
+	if err != nil || !hasMount {
+		glog.Warningf("targetPath is already not a MountPoint, path:%v error:%v", targetPath, err)
 		return &csi.NodeUnpublishVolumeResponse{}, nil
 	}
 
@@ -123,12 +120,8 @@ func (ns *nodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstag
 	defer ns.mutex.Unlock()
 	stagingTargetPath := req.GetStagingTargetPath()
 	hasMount, err := isMountPoint(stagingTargetPath)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "check isMountPoint[%v] error: %v", stagingTargetPath, err)
-	}
-
-	if !hasMount {
-		// already umount
+	if err != nil || !hasMount {
+		glog.Warningf("stagingTargetPath is already not a MountPoint, path:%v, error: %v", stagingTargetPath, err)
 		return &csi.NodeUnstageVolumeResponse{}, nil
 	}
 
@@ -139,4 +132,12 @@ func (ns *nodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstag
 
 	_ = os.Remove(getParentDirectory(stagingTargetPath))
 	return &csi.NodeUnstageVolumeResponse{}, nil
+}
+
+func (ns *nodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
+	monitor := NewMountPointerMonitor(ns.Driver, &ns.mutex)
+	go monitor.checkInvalidMountPointPeriod()
+	return &csi.NodeGetInfoResponse{
+		NodeId: ns.Driver.NodeID,
+	}, nil
 }

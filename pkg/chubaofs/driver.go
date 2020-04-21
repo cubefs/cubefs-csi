@@ -31,21 +31,21 @@ import (
 )
 
 type driver struct {
-	csiDriver *csicommon.CSIDriver
-	ids       *csicommon.DefaultIdentityServer
-	cs        *controllerServer
-	ns        *nodeServer
-
-	cap   []*csi.VolumeCapability_AccessMode
-	cscap []*csi.ControllerServiceCapability
-
-	clientSet *kubernetes.Clientset
+	*csicommon.CSIDriver
+	ids *csicommon.DefaultIdentityServer
+	cs  *controllerServer
+	ns  *nodeServer
 }
 
 func NewDriver(driverName, version, nodeID, kubeconfig string) (*driver, error) {
 	glog.Infof("driverName:%v, version:%v, nodeID:%v", driverName, version, nodeID)
+	clientSet, err := initClientSet(kubeconfig)
+	if err != nil {
+		glog.Errorf("init client-go Clientset fail. kubeconfig:%v, err:%v", kubeconfig, err)
+		return nil, err
+	}
 
-	csiDriver := csicommon.NewCSIDriver(driverName, version, nodeID)
+	csiDriver := csicommon.NewCSIDriver(driverName, version, nodeID, clientSet)
 	if csiDriver == nil {
 		return nil, status.Error(codes.InvalidArgument, "csiDriver init fail")
 	}
@@ -62,15 +62,8 @@ func NewDriver(driverName, version, nodeID, kubeconfig string) (*driver, error) 
 			csi.VolumeCapability_AccessMode_MULTI_NODE_MULTI_WRITER,
 		})
 
-	clientSet, err := initClientSet(kubeconfig)
-	if err != nil {
-		glog.Errorf("init client-go Clientset fail. kubeconfig:%v, err:%v", kubeconfig, err)
-		return nil, err
-	}
-
 	return &driver{
-		csiDriver: csiDriver,
-		clientSet: clientSet,
+		CSIDriver: csiDriver,
 	}, nil
 }
 
@@ -95,20 +88,20 @@ func initClientSet(kubeconfig string) (*kubernetes.Clientset, error) {
 
 func NewControllerServer(d *driver) *controllerServer {
 	return &controllerServer{
-		DefaultControllerServer: csicommon.NewDefaultControllerServer(d.csiDriver),
+		DefaultControllerServer: csicommon.NewDefaultControllerServer(d.CSIDriver),
 		driver:                  d,
 	}
 }
 
 func NewNodeServer(d *driver) *nodeServer {
 	return &nodeServer{
-		DefaultNodeServer: csicommon.NewDefaultNodeServer(d.csiDriver),
+		DefaultNodeServer: csicommon.NewDefaultNodeServer(d.CSIDriver),
 	}
 }
 
 func NewIdentityServer(d *driver) *identityServer {
 	return &identityServer{
-		DefaultIdentityServer: csicommon.NewDefaultIdentityServer(d.csiDriver),
+		DefaultIdentityServer: csicommon.NewDefaultIdentityServer(d.CSIDriver),
 	}
 }
 
@@ -117,7 +110,7 @@ func (d *driver) Run(endpoint string) {
 }
 
 func (d *driver) queryPersistentVolumes(pvName string) (*v1.PersistentVolume, error) {
-	persistentVolume, err := d.clientSet.CoreV1().PersistentVolumes().Get(pvName, metav1.GetOptions{})
+	persistentVolume, err := d.CSIDriver.ClientSet.CoreV1().PersistentVolumes().Get(pvName, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}

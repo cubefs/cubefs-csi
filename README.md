@@ -10,11 +10,10 @@ ChubaoFS Container Storage Interface (CSI) plugins.
 
 ## Enable privileged Pods
 
-To use CSI drivers, your Kubernetes cluster must allow privileged pods (i.e. --allow-privileged flag must be set to true for both the API server and the kubelet). Ensure your API server are started with the privileged flag.
+ChubaoFS CSI driver will use client-go to connect the Kubernetes API Server. First you need to get the kubeconfig file path, and then execute the following command:
 
 ```
-$ ./kube-apiserver ...  --allow-privileged=true ...
-$ ./kubelet ...  --allow-privileged=true ...
+$ kubectl create configmap csi-kube-config --from-file=config=/root/.kube/config
 ```
 
 ## Prepare on-premise ChubaoFS cluster
@@ -24,7 +23,6 @@ An on-premise ChubaoFS cluster can be deployed separately, or within the same Ku
 ## Deploy the CSI driver
 
 ```
-$ kubectl create configmap kubecfg --from-file=deploy/kubecfg```
 $ kubectl apply -f deploy/csi-rbac.yaml
 $ kubectl apply -f deploy/csi-controller-deployment.yaml
 $ kubectl apply -f deploy/csi-node-daemonset.yaml

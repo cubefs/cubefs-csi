@@ -37,7 +37,7 @@ func (ns *DefaultNodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.N
 
 func (ns *DefaultNodeServer) NodeGetId(ctx context.Context, req *csi.NodeGetIdRequest) (*csi.NodeGetIdResponse, error) {
 	return &csi.NodeGetIdResponse{
-		NodeId: ns.Driver.nodeID,
+		NodeId: ns.Driver.NodeID,
 	}, nil
 }
 
@@ -45,7 +45,7 @@ func (ns *DefaultNodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetIn
 	// check already mount directory, and execute umount
 
 	return &csi.NodeGetInfoResponse{
-		NodeId: ns.Driver.nodeID,
+		NodeId: ns.Driver.NodeID,
 	}, nil
 }
 
