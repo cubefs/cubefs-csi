@@ -72,6 +72,10 @@ func bindMount(stagingTargetPath string, targetPath string) error {
 	return nil
 }
 
+func listMount() ([]mount.MountPoint, error) {
+	return mount.New("").List()
+}
+
 func mountVolume(configFilePath string) error {
 	_, err := execCommand(CfsClientBin, "-c", configFilePath)
 	return err
