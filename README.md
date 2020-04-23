@@ -6,7 +6,7 @@ ChubaoFS Container Storage Interface (CSI) plugins.
 
 * Kubernetes 1.12.5
 * ChubaoFS 2.0.0
-* CSI spec version 0.3.0.
+* CSI spec version 0.3.0
 
 ## Enable privileged Pods
 
@@ -27,6 +27,12 @@ $ kubectl apply -f deploy/csi-rbac.yaml
 $ kubectl apply -f deploy/csi-controller-deployment.yaml
 $ kubectl apply -f deploy/csi-node-daemonset.yaml
 ```
+> **Notes:** If your kubernetes cluster alter the kubelet path `/var/lib/kubelet` to other path(such as: `/data1/k8s/lib/kubelet`), you must execute the following commands to update the path:
+>
+> `sed -i 's#/var/lib/kubelet#/data1/k8s/lib/kubelet#g'  deploy/csi-controller-deployment.yaml`
+>
+> `sed -i 's#/var/lib/kubelet#/data1/k8s/lib/kubelet#g'  deploy/csi-node-daemonset.yaml`
+
 ## Use Remote ChubaoFS Cluster as backend storage
 
 There is only 3 steps before finally using remote ChubaoFS cluster as file system
