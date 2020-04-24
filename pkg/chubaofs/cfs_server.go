@@ -34,6 +34,9 @@ const (
 	KMasterAddr    = "masterAddr"
 	KlogLevel      = "logLevel"
 	KOwner         = "owner"
+	KCrossZone     = "crossZone"
+	KEnableToken   = "enableToken"
+	KZoneName      = "zoneName"
 	KConsulAddr    = "consulAddr"
 	KAuthenticate  = "authenticate"
 	KTicketHosts   = "ticketHost"
@@ -65,6 +68,9 @@ type cfsServer struct {
 	volName        string
 	owner          string
 	clientConfFile string
+	crossZone      string
+	enableToken    string
+	zoneName       string
 	clientConf     *cfsClientConf
 }
 
@@ -110,6 +116,10 @@ func newCfsServer(volName string, param map[string]string) (cs *cfsServer, err e
 	clientConfFile := defaultClientConfPath + newVolName + jsonFileSuffix
 	logDir := defaultLogDir + newVolName
 	owner := getValueWithDefault(param, KOwner, defaultOwner)
+	crossZone := getValueWithDefault(param, KCrossZone, "false")
+	enableToken := getValueWithDefault(param, KEnableToken, "false")
+	zoneName := getValue(param, KZoneName)
+
 	logLevel := getValueWithDefault(param, KlogLevel, defaultLogLevel)
 	consulAddr := getValue(param, KConsulAddr)
 	lookupValid := getValue(param, KLookupValid)
@@ -130,6 +140,9 @@ func newCfsServer(volName string, param map[string]string) (cs *cfsServer, err e
 		masterAddr:     masterAddr,
 		volName:        newVolName,
 		owner:          owner,
+		crossZone:      crossZone,
+		enableToken:    enableToken,
+		zoneName:       zoneName,
 		clientConfFile: clientConfFile,
 		clientConf: &cfsClientConf{
 			MasterAddr:    masterAddr,
@@ -184,7 +197,8 @@ func (cs *cfsServer) persistClientConf(mountPoint string) error {
 }
 
 func (cs *cfsServer) createVolume(capacityGB int64) error {
-	url := fmt.Sprintf("http://%s/admin/createVol?name=%s&capacity=%v&owner=%v", cs.masterAddr, cs.volName, capacityGB, cs.owner)
+	url := fmt.Sprintf("http://%s/admin/createVol?name=%s&capacity=%v&owner=%v&crossZone=%v&enableToken=%v&zoneName=%v",
+		cs.masterAddr, cs.volName, capacityGB, cs.owner, cs.crossZone, cs.enableToken, cs.zoneName)
 	glog.Infof("createVol url: %v", url)
 	resp, err := cs.executeRequest(url)
 	if err != nil {
