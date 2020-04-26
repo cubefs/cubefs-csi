@@ -27,6 +27,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 )
 
 const (
@@ -197,8 +198,9 @@ func (cs *cfsServer) persistClientConf(mountPoint string) error {
 }
 
 func (cs *cfsServer) createVolume(capacityGB int64) error {
+	masterAddr := strings.Split(cs.masterAddr, ",")[0]
 	url := fmt.Sprintf("http://%s/admin/createVol?name=%s&capacity=%v&owner=%v&crossZone=%v&enableToken=%v&zoneName=%v",
-		cs.masterAddr, cs.volName, capacityGB, cs.owner, cs.crossZone, cs.enableToken, cs.zoneName)
+		masterAddr, cs.volName, capacityGB, cs.owner, cs.crossZone, cs.enableToken, cs.zoneName)
 	glog.Infof("createVol url: %v", url)
 	resp, err := cs.executeRequest(url)
 	if err != nil {
