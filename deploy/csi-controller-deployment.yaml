@@ -28,6 +28,8 @@ spec:
             - --csi-address=$(ADDRESS)
             - --kubeconfig=/etc/kubernetes/config
           env:
+            - name: TZ
+              value: Asia/Shanghai
             - name: ADDRESS
               value: /var/lib/kubelet/plugins/csi.chubaofs.com/csi.sock
           resources:
@@ -52,6 +54,8 @@ spec:
             - --csi-address=$(ADDRESS)
             - --kubeconfig=/etc/kubernetes/config
           env:
+            - name: TZ
+              value: Asia/Shanghai
             - name: ADDRESS
               value: /csi/csi.sock
           resources:
@@ -78,6 +82,8 @@ spec:
               su -p -s /bin/bash -c "/cfs/bin/start.sh &"
               su -p -s /bin/bash -c "sleep 9999999d"
           env:
+            - name: TZ
+              value: Asia/Shanghai
             - name: KUBE_CONFIG
               value: /etc/kubernetes/config
             - name: LOG_LEVEL
