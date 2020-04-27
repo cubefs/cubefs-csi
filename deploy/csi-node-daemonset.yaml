@@ -71,7 +71,7 @@ spec:
             - name: LOG_LEVEL
               value: "5"
             - name: CSI_ENDPOINT
-              value: unix:///var/lib/kubelet/plugins/csi.chubaofs.com/csi.sock
+              value: unix:///csi/csi.sock
             - name: DRIVER_NAME
               value: csi.chubaofs.com
             - name: KUBE_NODE_NAME
@@ -84,7 +84,7 @@ spec:
               cpu: 1000m
               memory: 2Gi
           volumeMounts:
-            - mountPath: /var/lib/kubelet/plugins/csi.chubaofs.com
+            - mountPath: /csi
               name: socket-dir
             - mountPath: /var/lib/kubelet/pods
               mountPropagation: Bidirectional
