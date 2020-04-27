@@ -111,7 +111,7 @@ func (mpMonitor *MountPointMonitor) checkAndUMountInvalidCfsMountPointList(mount
 			return
 		}
 
-		glog.Infof("cfs-client process[%v] already started, configFilePath:%v", configFilePath)
+		glog.Infof("cfs-client process already started, configFilePath:%v", configFilePath)
 		for _, mountPoint := range invalidMountPointList {
 			err := bindMount(globalMountPoint.path, mountPoint.path)
 			if err != nil {
