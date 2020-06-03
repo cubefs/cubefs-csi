@@ -25,6 +25,7 @@ import (
 	"google.golang.org/grpc/status"
 	"os"
 	"sync"
+	"time"
 )
 
 type nodeServer struct {
@@ -81,6 +82,7 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 func (ns *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
 	ns.mutex.Lock()
 	defer ns.mutex.Unlock()
+	start := time.Now()
 	stagingTargetPath := req.GetStagingTargetPath()
 	err := createMountPoint(stagingTargetPath)
 	if err != nil {
@@ -111,6 +113,9 @@ func (ns *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVol
 	if err = cfsServer.runClient(); err != nil {
 		return nil, status.Errorf(codes.Internal, "mount fail, error: %v", err)
 	}
+
+	duration := time.Since(start)
+	glog.Infof("NodeStageVolume stagingTargetPath:%v cost time:%v", stagingTargetPath, duration)
 
 	return &csi.NodeStageVolumeResponse{}, nil
 }
