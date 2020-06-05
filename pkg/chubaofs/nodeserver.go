@@ -23,7 +23,6 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"os"
 	"sync"
 	"time"
 )
@@ -75,7 +74,10 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 		return nil, status.Errorf(codes.Internal, "umount targetPath[%v] fail, error: %v", targetPath, err)
 	}
 
-	_ = os.Remove(getParentDirectory(targetPath))
+	if err = CleanPath(targetPath); err != nil {
+		glog.Warningf("remove targetPath: %v with error: %v", targetPath, err)
+	}
+
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
@@ -135,7 +137,10 @@ func (ns *nodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstag
 		return nil, status.Errorf(codes.Internal, "umount stagingTargetPath[%v] fail, error: %v", stagingTargetPath, err)
 	}
 
-	_ = os.Remove(getParentDirectory(stagingTargetPath))
+	if err = CleanPath(stagingTargetPath); err != nil {
+		glog.Warningf("remove stagingTargetPath: %v with error: %v", stagingTargetPath, err)
+	}
+
 	return &csi.NodeUnstageVolumeResponse{}, nil
 }
 

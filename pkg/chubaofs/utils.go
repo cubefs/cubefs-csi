@@ -22,6 +22,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path"
 	"strings"
 )
 
@@ -93,17 +94,9 @@ func execCommand(command string, args ...string) ([]byte, error) {
 	return cmd.CombinedOutput()
 }
 
-func substr(s string, pos, length int) string {
-	runes := []rune(s)
-	l := pos + length
-	if l > len(runes) {
-		l = len(runes)
-	}
-	return string(runes[pos:l])
-}
-
-func getParentDirectory(dirctory string) string {
-	return substr(dirctory, 0, strings.LastIndex(dirctory, "/"))
+// remove the parent path of targetPath
+func CleanPath(targetPath string) error {
+	return os.RemoveAll(path.Dir(targetPath))
 }
 
 func pathExists(path string) (bool, error) {

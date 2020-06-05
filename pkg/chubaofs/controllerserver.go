@@ -36,6 +36,7 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		return nil, err
 	}
 
+	start := time.Now()
 	// Volume Size - Default is 1 GiB
 	capacity := req.GetCapacityRange().GetRequiredBytes()
 	capacityGB := capacity >> 30
@@ -53,7 +54,8 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		return nil, err
 	}
 
-	glog.V(0).Infof("create volume[%v] success.", volName)
+	duration := time.Since(start)
+	glog.V(0).Infof("create volume[%v] success. cost time:%v", volName, duration)
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
 			Id:            volName,
