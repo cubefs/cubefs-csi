@@ -130,5 +130,5 @@ spec:
 
 The field `claimName` refers to the PVC created before.
 ```
-$ kubectl create -f examples/deployment.yaml.yaml
+$ kubectl create -f examples/deployment.yaml
 ```
