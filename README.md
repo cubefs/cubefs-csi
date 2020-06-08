@@ -8,6 +8,8 @@ ChubaoFS Container Storage Interface (CSI) plugins.
 * ChubaoFS 2.0.0
 * CSI spec version 0.3.0
 
+> CSI v0.x is no longer supported as of Kubernetes v1.17 in accordance with deprecation policy set out in Kubernetes v1.13
+
 ## Enable privileged Pods
 
 ChubaoFS CSI driver will use client-go to connect the Kubernetes API Server. First you need to get the kubeconfig file path, and then execute the following command:
@@ -128,5 +130,5 @@ spec:
 
 The field `claimName` refers to the PVC created before.
 ```
-$ kubectl create -f examples/deployment.yaml.yaml
+$ kubectl create -f examples/deployment.yaml
 ```

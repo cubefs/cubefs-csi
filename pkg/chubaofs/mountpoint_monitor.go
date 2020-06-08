@@ -148,7 +148,7 @@ func (mpMonitor *MountPointMonitor) checkAndUMountInvalidCfsMountPoint(mountPoin
 				return
 			}
 
-			_ = os.Remove(getParentDirectory(path))
+			_ = CleanPath(path)
 		} else {
 			glog.Errorf("MountPoint stat error: %v", err)
 		}

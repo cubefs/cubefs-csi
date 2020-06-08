@@ -17,9 +17,8 @@ limitations under the License.
 package csicommon
 
 import (
-	"testing"
-
 	"github.com/stretchr/testify/assert"
+	"testing"
 )
 
 func TestParseEndpoint(t *testing.T) {
