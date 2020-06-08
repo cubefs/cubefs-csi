@@ -104,7 +104,7 @@ type cfsClientConf struct {
 type cfsServerResponse struct {
 	Code int    `json:"code"`
 	Msg  string `json:"msg"`
-	Data string `json:"data"`
+	Data string `json:"data,omitempty"`
 }
 
 func newCfsServer(volName string, param map[string]string) (cs *cfsServer, err error) {
@@ -229,6 +229,7 @@ func (cs *cfsServer) deleteVolume() error {
 	glog.Infof("deleteVol url: %v", url)
 	resp, err := cs.executeRequest(url)
 	if err != nil {
+		glog.Fatalf("delete volume fail. url:%v error:%v", url, err)
 		return err
 	}
 

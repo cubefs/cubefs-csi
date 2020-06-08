@@ -22,7 +22,7 @@ parameters:
   zoneName: ""
 
   # Log level：debug, info, warn, error
-  logLevel: "debug"
+  logLevel: "info"
   # Lookup valid duration in FUSE kernel module, unit: sec
   #   lookupValid: ""
   # Attr valid duration in FUSE kernel module, unit: sec
