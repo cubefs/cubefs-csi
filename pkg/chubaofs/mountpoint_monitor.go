@@ -42,37 +42,37 @@ type CfsMountPoint struct {
 	pvName             string
 	podUid             string
 	isGlobalMountPoint bool
-	isCorruptedMnt     bool
 }
 
-func (mp *CfsMountPoint) checkMountPoint() {
+func CheckMountPoint(mp *CfsMountPoint) bool {
 	_, err := os.Stat(mp.path)
 	if err != nil {
 		if mount.IsCorruptedMnt(err) {
 			// error: "Transport endpoint is not connected"
-			mp.isCorruptedMnt = true
+			return true
 		} else {
 			// other unknown error
 			glog.Errorf("os.Stat fail, path:%v error:%v", mp.path, err)
 		}
 	}
+
+	return false
 }
 
 // check invalid mount point, restart cfs-client if pod is running, umount if pod terminated
 func (mpMonitor *MountPointMonitor) checkInvalidMountPointPeriod() {
-	time.Sleep(60 * time.Second)
 	glog.Info("invalid mount point monitor started")
-	for true {
+	for {
+		time.Sleep(10 * time.Second)
 		//glog.Info("checking invalid mount point")
 		mpMonitor.checkInvalidMountPoint()
-		time.Sleep(10 * time.Second)
 	}
 }
 
 func (mpMonitor *MountPointMonitor) checkInvalidMountPoint() {
-	cfsMountPointMap, err := getCfsMountPointMap()
+	cfsMountPointMap, err := GetCfsMountPointMap()
 	if err != nil {
-		glog.Errorf("getCfsMountPointMap fail, err:%v", err)
+		glog.Errorf("GetCfsMountPointMap fail, err:%v", err)
 		return
 	}
 
@@ -89,8 +89,7 @@ func (mpMonitor *MountPointMonitor) checkAndUMountInvalidCfsMountPointList(mount
 	var invalidMountPointList []*CfsMountPoint
 	for _, mountPoint := range mountPointList {
 		if mountPoint.isGlobalMountPoint {
-			mountPoint.checkMountPoint()
-			if mountPoint.isCorruptedMnt {
+			if CheckMountPoint(mountPoint) {
 				globalMountPoint = mountPoint
 			}
 		} else {
@@ -100,7 +99,7 @@ func (mpMonitor *MountPointMonitor) checkAndUMountInvalidCfsMountPointList(mount
 
 	if globalMountPoint != nil {
 		for _, mountPoint := range mountPointList {
-			mpMonitor.uMountPoint(mountPoint)
+			mountPoint.UMountPoint()
 		}
 
 		configFilePath := fmt.Sprintf("/cfs/conf/%v.json", globalMountPoint.volName)
@@ -120,10 +119,15 @@ func (mpMonitor *MountPointMonitor) checkAndUMountInvalidCfsMountPointList(mount
 				glog.Errorf("mount bind success. stagingTargetPath:%v targetPath:%v", globalMountPoint.path, mountPoint.path)
 			}
 		}
+	} else {
+		glog.Warningf("no global MountPoint, MountPoint size:%d", len(mountPointList))
+		for _, mountPoint := range mountPointList {
+			mountPoint.UMountPoint()
+		}
 	}
 }
 
-func (mpMonitor *MountPointMonitor) uMountPoint(mountPoint *CfsMountPoint) {
+func (mountPoint *CfsMountPoint) UMountPoint() {
 	path := mountPoint.path
 	glog.Warningf("umount path:%v", path)
 	err := umountVolume(path)
@@ -155,7 +159,7 @@ func (mpMonitor *MountPointMonitor) checkAndUMountInvalidCfsMountPoint(mountPoin
 	}
 }
 
-func getCfsMountPointMap() (map[string][]*CfsMountPoint, error) {
+func GetCfsMountPointMap() (map[string][]*CfsMountPoint, error) {
 	mountList, err := listMount()
 	if err != nil {
 		return nil, err
@@ -203,7 +207,6 @@ func convertToCfsMountPoint(mountPoint mount.MountPoint) *CfsMountPoint {
 			pvName:             params[1],
 			podUid:             "",
 			isGlobalMountPoint: true,
-			isCorruptedMnt:     false,
 		}
 	} else if strings.HasSuffix(path, "/mount") {
 		// /var/lib/kubelet/pods/9cda187a-7fb3-11ea-80b3-246e968d4b38/volumes/kubernetes.io~csi/pvc-9ae9405c-7fb3-11ea-80b3-246e968d4b38/mount
@@ -219,7 +222,6 @@ func convertToCfsMountPoint(mountPoint mount.MountPoint) *CfsMountPoint {
 			pvName:             params[2],
 			podUid:             params[1],
 			isGlobalMountPoint: false,
-			isCorruptedMnt:     false,
 		}
 	} else {
 		return nil

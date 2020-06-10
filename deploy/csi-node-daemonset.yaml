@@ -4,6 +4,8 @@ metadata:
   name: cfs-csi-node
   namespace: default
 spec:
+  updateStrategy:
+    type: OnDelete
   selector:
     matchLabels:
       app: cfs-csi-node
@@ -50,7 +52,7 @@ spec:
             - name: kube-config
               mountPath: /etc/kubernetes
         - name: cfs-driver
-          image: chubaofs/cfs-csi-driver:2.0.9
+          image: chubaofs/cfs-csi-driver:2.1.2
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true

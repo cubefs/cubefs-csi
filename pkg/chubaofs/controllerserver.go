@@ -84,27 +84,12 @@ func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 
 	err = cfsServer.deleteVolume()
 	if err != nil {
-		glog.Fatalf("delete volume:%v fail. error:%v", cfsServer.volName, err)
-		go cs.deleteLegacyVolume(cfsServer)
+		return nil, status.Error(codes.Unknown, err.Error())
 	} else {
 		glog.V(0).Infof("delete volume:%v success.", volumeName)
 	}
 
 	return &csi.DeleteVolumeResponse{}, nil
-}
-
-func (cs *controllerServer) deleteLegacyVolume(cfsServer *cfsServer) {
-	for {
-		time.Sleep(10 * time.Second)
-		if err := cfsServer.deleteVolume(); err != nil {
-			glog.Fatalf("delete volume:%v fail. error:%v", cfsServer.volName, err)
-			continue
-		}
-
-		break
-	}
-
-	glog.V(0).Infof("delete volume:%v success.", cfsServer.volName)
 }
 
 func (cs *controllerServer) ValidateVolumeCapabilities(ctx context.Context, req *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {

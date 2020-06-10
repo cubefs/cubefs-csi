@@ -6,3 +6,4 @@ build/bin/cfs-client
 *.orig
 *.patch
 *.rej
+.DS_Store
