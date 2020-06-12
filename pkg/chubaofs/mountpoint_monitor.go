@@ -1,9 +1,11 @@
 package chubaofs
 
 import (
+	"encoding/json"
 	"fmt"
 	csicommon "github.com/chubaofs/chubaofs-csi/pkg/csi-common"
 	"github.com/golang/glog"
+	"io/ioutil"
 	"k8s.io/utils/mount"
 	"os"
 	"regexp"
@@ -44,7 +46,7 @@ type CfsMountPoint struct {
 	isGlobalMountPoint bool
 }
 
-func CheckMountPoint(mp *CfsMountPoint) bool {
+func IsCorruptedMnt(mp *CfsMountPoint) bool {
 	_, err := os.Stat(mp.path)
 	if err != nil {
 		if mount.IsCorruptedMnt(err) {
@@ -78,51 +80,88 @@ func (mpMonitor *MountPointMonitor) checkInvalidMountPoint() {
 
 	for _, v := range cfsMountPointMap {
 		mpMonitor.mutex.Lock()
-		mpMonitor.checkAndUMountInvalidCfsMountPointList(v)
+		mpMonitor.reMountInvalidVolume(v)
 		mpMonitor.mutex.Unlock()
 	}
 }
 
 // Only deal with the state that cfs-client is killed. Ignore user umount and stop cfs-client is not considered
-func (mpMonitor *MountPointMonitor) checkAndUMountInvalidCfsMountPointList(mountPointList []*CfsMountPoint) {
+func (mpMonitor *MountPointMonitor) reMountInvalidVolume(mountPointList []*CfsMountPoint) {
+	if mountPointList == nil || len(mountPointList) == 0 {
+		return
+	}
+
 	var globalMountPoint *CfsMountPoint
-	var invalidMountPointList []*CfsMountPoint
+	var subMountPoints = make([]*CfsMountPoint, 0)
+	var hasCorruptedMnt = false
+
+	// check if globalMountPoint exists
 	for _, mountPoint := range mountPointList {
 		if mountPoint.isGlobalMountPoint {
-			if CheckMountPoint(mountPoint) {
-				globalMountPoint = mountPoint
-			}
+			// contain globalMountPoint
+			globalMountPoint = mountPoint
 		} else {
-			invalidMountPointList = append(invalidMountPointList, mountPoint)
+			subMountPoints = append(subMountPoints, mountPoint)
+		}
+
+		if IsCorruptedMnt(mountPoint) {
+			hasCorruptedMnt = true
 		}
 	}
 
-	if globalMountPoint != nil {
+	if !hasCorruptedMnt || len(subMountPoints) == 0 {
+		// all MountPoint is OK, or no sub MountPoint
+		return
+	}
+
+	if globalMountPoint == nil || IsCorruptedMnt(globalMountPoint) {
+		glog.Info("globalMountPoint not work")
 		for _, mountPoint := range mountPointList {
 			mountPoint.UMountPoint()
 		}
 
-		configFilePath := fmt.Sprintf("/cfs/conf/%v.json", globalMountPoint.volName)
-		glog.Infof("GlobalMountPoint:%v is invalid mount point, restart cfs-client process and remount, configFilePath:%v", globalMountPoint, configFilePath)
-		err := mountVolume(configFilePath)
+		configFilePath := fmt.Sprintf("/cfs/conf/%v.json", subMountPoints[0].volName)
+		file, err := ioutil.ReadFile(configFilePath)
 		if err != nil {
-			glog.Errorf("start cfs-client process fail, GlobalMountPoint:%v configFilePath:%v error: %v", globalMountPoint, configFilePath, err)
+			glog.Errorf("config file[%s] not found, MountPoint[%v] cannot remount", configFilePath, subMountPoints)
 			return
 		}
 
-		glog.Infof("cfs-client process already started, configFilePath:%v", configFilePath)
-		for _, mountPoint := range invalidMountPointList {
+		glog.Infof("restart cfs-client process and remount, configFilePath:%v", configFilePath)
+		err = mountVolume(configFilePath)
+		if err != nil {
+			glog.Errorf("start cfs-client process fail, configFilePath:%v error: %v", configFilePath, err)
+			return
+		}
+
+		glog.Infof("cfs-client process already started, configFilePath:%s", configFilePath)
+
+		clientConf := &cfsClientConf{}
+		err = json.Unmarshal(file, clientConf)
+		for _, mountPoint := range subMountPoints {
+			err := bindMount(clientConf.MountPoint, mountPoint.path)
+			if err != nil {
+				glog.Errorf("mount bind fail, stagingTargetPath:%v targetPath:%v error: %v", clientConf.MountPoint, mountPoint.path, err)
+			} else {
+				glog.Errorf("mount bind success. stagingTargetPath:%v targetPath:%v", clientConf.MountPoint, mountPoint.path)
+			}
+		}
+
+	} else {
+		glog.Info("globalMountPoint exists")
+		for _, mountPoint := range subMountPoints {
+			if !IsCorruptedMnt(mountPoint) {
+				continue
+			}
+
+			// sub MountPoint remount
+			mountPoint.UMountPoint()
 			err := bindMount(globalMountPoint.path, mountPoint.path)
 			if err != nil {
 				glog.Errorf("mount bind fail, stagingTargetPath:%v targetPath:%v error: %v", globalMountPoint.path, mountPoint.path, err)
 			} else {
 				glog.Errorf("mount bind success. stagingTargetPath:%v targetPath:%v", globalMountPoint.path, mountPoint.path)
 			}
-		}
-	} else {
-		glog.Warningf("no global MountPoint, MountPoint size:%d", len(mountPointList))
-		for _, mountPoint := range mountPointList {
-			mountPoint.UMountPoint()
 		}
 	}
 }
