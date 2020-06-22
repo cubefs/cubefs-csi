@@ -14,7 +14,7 @@ spec:
         app: cfs-csi-demo-pod
     spec:
       nodeSelector:
-        csi.chubaofs.com/demo: enable
+        chubaofs-csi-node: enabled
 #      imagePullSecrets:
 #        - name: registry-key
       containers:

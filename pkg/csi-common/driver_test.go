@@ -19,7 +19,7 @@ package csicommon
 import (
 	"testing"
 
-	"github.com/container-storage-interface/spec/lib/go/csi/v0"
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -31,19 +31,19 @@ const (
 )
 
 var (
-	vendorVersion = "0.3.0"
+	vendorVersion = "1.0.0-rc2"
 )
 
 func NewFakeDriver() *CSIDriver {
 
-	driver := NewCSIDriver(fakeDriverName, vendorVersion, fakeNodeID, nil)
+	driver := NewCSIDriver(fakeDriverName, vendorVersion, fakeNodeID)
 
 	return driver
 }
 
 func TestNewFakeDriver(t *testing.T) {
 	// Test New fake driver with invalid arguments.
-	d := NewCSIDriver("", vendorVersion, fakeNodeID, nil)
+	d := NewCSIDriver("", vendorVersion, fakeNodeID)
 	assert.Nil(t, d)
 }
 

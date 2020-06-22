@@ -3,7 +3,6 @@ package chubaofs
 import (
 	"encoding/json"
 	"fmt"
-	csicommon "github.com/chubaofs/chubaofs-csi/pkg/csi-common"
 	"github.com/golang/glog"
 	"io/ioutil"
 	"k8s.io/utils/mount"
@@ -26,14 +25,12 @@ var (
 )
 
 type MountPointMonitor struct {
-	driver *csicommon.CSIDriver
-	mutex  *sync.RWMutex
+	mutex *sync.RWMutex
 }
 
-func NewMountPointerMonitor(driver *csicommon.CSIDriver, mutex *sync.RWMutex) *MountPointMonitor {
+func NewMountPointerMonitor(mutex *sync.RWMutex) *MountPointMonitor {
 	return &MountPointMonitor{
-		driver: driver,
-		mutex:  mutex,
+		mutex: mutex,
 	}
 }
 

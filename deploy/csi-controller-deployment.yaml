@@ -15,23 +15,21 @@ spec:
     spec:
       serviceAccount: cfs-csi-service-account
       nodeSelector:
-        csi.chubaofs.com/controller: enabled
+        chubaofs-csi-controller: enabled
       containers:
-        - name: external-provisioner
-          image: quay.io/k8scsi/csi-provisioner:v0.4.2
+        - name: csi-provisioner
+          image: quay.io/k8scsi/csi-provisioner:v1.6.0
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
           args:
-            - --v=5
             - --provisioner=csi.chubaofs.com
             - --csi-address=$(ADDRESS)
-            - --kubeconfig=/etc/kubernetes/config
           env:
             - name: TZ
               value: Asia/Shanghai
             - name: ADDRESS
-              value: /csi/csi.sock
+              value: /csi/csi-controller.sock
           resources:
             requests:
               cpu: 200m
@@ -42,22 +40,18 @@ spec:
           volumeMounts:
             - mountPath: /csi
               name: socket-dir
-            - name: kube-config
-              mountPath: /etc/kubernetes
-        - name: external-attacher
-          image: quay.io/k8scsi/csi-attacher:v0.4.2
+        - name: csi-attacher
+          image: quay.io/k8scsi/csi-attacher:v2.0.0
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
           args:
-            - --v=5
             - --csi-address=$(ADDRESS)
-            - --kubeconfig=/etc/kubernetes/config
           env:
             - name: TZ
               value: Asia/Shanghai
             - name: ADDRESS
-              value: /csi/csi.sock
+              value: /csi/csi-controller.sock
           resources:
             requests:
               cpu: 200m
@@ -65,10 +59,8 @@ spec:
           volumeMounts:
             - mountPath: /csi
               name: socket-dir
-            - name: kube-config
-              mountPath: /etc/kubernetes
         - name: cfs-driver
-          image: chubaofs/cfs-csi-driver:2.1.2
+          image: chubaofs/cfs-csi-driver:3.0.0
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
@@ -84,12 +76,10 @@ spec:
           env:
             - name: TZ
               value: Asia/Shanghai
-            - name: KUBE_CONFIG
-              value: /etc/kubernetes/config
             - name: LOG_LEVEL
               value: "5"
             - name: CSI_ENDPOINT
-              value: unix:///csi/csi.sock
+              value: unix:///csi/csi-controller.sock
             - name: DRIVER_NAME
               value: csi.chubaofs.com
             - name: KUBE_NODE_NAME
@@ -97,6 +87,13 @@ spec:
                 fieldRef:
                   apiVersion: v1
                   fieldPath: spec.nodeName
+          lifecycle:
+            preStop:
+              exec:
+                command: [
+                  "/bin/sh", "-c",
+                  "rm -rf /csi/csi-controller.sock"
+                ]
           resources:
             requests:
               cpu: 200m
@@ -107,8 +104,6 @@ spec:
             - mountPath: /var/lib/kubelet/pods
               mountPropagation: Bidirectional
               name: mountpoint-dir
-            - name: kube-config
-              mountPath: /etc/kubernetes
       volumes:
         - hostPath:
             path: /var/lib/kubelet/plugins/csi.chubaofs.com
@@ -118,6 +113,3 @@ spec:
             path: /var/lib/kubelet/pods
             type: Directory
           name: mountpoint-dir
-        - configMap:
-            name: csi-kube-config
-          name: kube-config

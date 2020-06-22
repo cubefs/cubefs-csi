@@ -16,23 +16,21 @@ spec:
     spec:
       serviceAccount: cfs-csi-service-account
       nodeSelector:
-        csi.chubaofs.com/node: enabled
+        chubaofs-csi-node: enabled
       containers:
-        - name: driver-registrar
-          image: quay.io/k8scsi/driver-registrar:v0.4.2
+        - name: csi-node-driver-registrar
+          image: quay.io/k8scsi/csi-node-driver-registrar:v1.3.0
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
           args:
-            - --v=5
             - --csi-address=$(ADDRESS)
             - --kubelet-registration-path=$(DRIVER_REG_SOCK_PATH)
-            - --kubeconfig=/etc/kubernetes/config
           env:
             - name: TZ
               value: Asia/Shanghai
             - name: ADDRESS
-              value: /var/lib/kubelet/plugins/csi.chubaofs.com/csi.sock
+              value: /csi/csi.sock
             - name: DRIVER_REG_SOCK_PATH
               value: /var/lib/kubelet/plugins/csi.chubaofs.com/csi.sock
             - name: KUBE_NODE_NAME
@@ -45,14 +43,12 @@ spec:
               cpu: 200m
               memory: 256Mi
           volumeMounts:
-            - mountPath: /var/lib/kubelet/plugins/csi.chubaofs.com
+            - mountPath: /csi
               name: socket-dir
             - mountPath: /registration
               name: registration-dir
-            - name: kube-config
-              mountPath: /etc/kubernetes
         - name: cfs-driver
-          image: chubaofs/cfs-csi-driver:2.1.2
+          image: chubaofs/cfs-csi-driver:3.0.0
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
@@ -68,8 +64,6 @@ spec:
           env:
             - name: TZ
               value: Asia/Shanghai
-            - name: KUBE_CONFIG
-              value: /etc/kubernetes/config
             - name: LOG_LEVEL
               value: "5"
             - name: CSI_ENDPOINT
@@ -81,6 +75,13 @@ spec:
                 fieldRef:
                   apiVersion: v1
                   fieldPath: spec.nodeName
+          lifecycle:
+            preStop:
+              exec:
+                command: [
+                  "/bin/sh", "-c",
+                  "rm -rf /csi/csi.sock"
+                ]
           resources:
             requests:
               cpu: 1000m
@@ -91,21 +92,16 @@ spec:
             - mountPath: /var/lib/kubelet/pods
               mountPropagation: Bidirectional
               name: mountpoint-dir
-            - name: kube-config
-              mountPath: /etc/kubernetes
       volumes:
         - hostPath:
             path: /var/lib/kubelet/plugins/csi.chubaofs.com
             type: DirectoryOrCreate
           name: socket-dir
         - hostPath:
-            path: /var/lib/kubelet/plugins/
-            type: Directory
+            path: /var/lib/kubelet/plugins_registry
+            type: DirectoryOrCreate
           name: registration-dir
         - hostPath:
             path: /var/lib/kubelet/pods
             type: Directory
           name: mountpoint-dir
-        - configMap:
-            name: csi-kube-config
-          name: kube-config

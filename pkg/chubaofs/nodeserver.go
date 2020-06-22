@@ -17,8 +17,8 @@ limitations under the License.
 package chubaofs
 
 import (
-	"github.com/chubaofs/chubaofs-csi/pkg/csi-common"
-	"github.com/container-storage-interface/spec/lib/go/csi/v0"
+	csicommon "github.com/chubaofs/chubaofs-csi/pkg/csi-common"
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
@@ -101,7 +101,7 @@ func (ns *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVol
 	}
 
 	volumeName := req.GetVolumeId()
-	param := req.VolumeAttributes
+	param := req.VolumeContext
 	cfsServer, err := newCfsServer(volumeName, param)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "new cfs server error, %v", err)
@@ -145,9 +145,23 @@ func (ns *nodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstag
 }
 
 func (ns *nodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
-	monitor := NewMountPointerMonitor(ns.Driver, &ns.mutex)
+	monitor := NewMountPointerMonitor(&ns.mutex)
 	go monitor.checkInvalidMountPointPeriod()
 	return &csi.NodeGetInfoResponse{
 		NodeId: ns.Driver.NodeID,
+	}, nil
+}
+
+func (ns *nodeServer) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
+	return &csi.NodeGetCapabilitiesResponse{
+		Capabilities: []*csi.NodeServiceCapability{
+			{
+				Type: &csi.NodeServiceCapability_Rpc{
+					Rpc: &csi.NodeServiceCapability_RPC{
+						Type: csi.NodeServiceCapability_RPC_STAGE_UNSTAGE_VOLUME,
+					},
+				},
+			},
+		},
 	}, nil
 }
