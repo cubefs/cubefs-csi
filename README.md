@@ -20,7 +20,7 @@ $ kubectl create configmap csi-kube-config --from-file=config=/root/.kube/config
 
 ## Prepare on-premise ChubaoFS cluster
 
-An on-premise ChubaoFS cluster can be deployed separately, or within the same Kubernetes cluster as applications which requrie persistent volumes. Please refer to [chubaofs-helm](https://github.com/chubaofs/chubaofs-helm) for more details on deployment using Helm.
+An on-premise ChubaoFS cluster can be deployed separately, or within the same Kubernetes cluster as applications which require persistent volumes. Please refer to [chubaofs-helm](https://github.com/chubaofs/chubaofs-helm) for more details on deployment using Helm.
 
 ## Deploy the CSI driver
 
