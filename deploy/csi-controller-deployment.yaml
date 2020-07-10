@@ -68,7 +68,7 @@ spec:
             - name: kube-config
               mountPath: /etc/kubernetes
         - name: cfs-driver
-          image: chubaofs/cfs-csi-driver:2.1.2
+          image: chubaofs/cfs-csi-driver:2.1.3
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
