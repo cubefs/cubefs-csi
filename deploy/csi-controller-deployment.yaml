@@ -60,7 +60,7 @@ spec:
             - mountPath: /csi
               name: socket-dir
         - name: cfs-driver
-          image: chubaofs/cfs-csi-driver:3.0.0
+          image: chubaofs/cfs-csi-driver:3.0.1
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
