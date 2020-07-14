@@ -17,8 +17,8 @@ limitations under the License.
 package chubaofs
 
 import (
-	"github.com/chubaofs/chubaofs-csi/pkg/csi-common"
-	"github.com/container-storage-interface/spec/lib/go/csi/v0"
+	csicommon "github.com/chubaofs/chubaofs-csi/pkg/csi-common"
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
@@ -58,9 +58,9 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 	glog.V(0).Infof("create volume[%v] success. cost time:%v", volName, duration)
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
-			Id:            volName,
+			VolumeId:      volName,
 			CapacityBytes: capacity,
-			Attributes:    req.GetParameters(),
+			VolumeContext: req.GetParameters(),
 		},
 	}, nil
 }
@@ -95,8 +95,13 @@ func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 func (cs *controllerServer) ValidateVolumeCapabilities(ctx context.Context, req *csi.ValidateVolumeCapabilitiesRequest) (*csi.ValidateVolumeCapabilitiesResponse, error) {
 	for _, cap := range req.VolumeCapabilities {
 		if cap.GetBlock() != nil {
-			return &csi.ValidateVolumeCapabilitiesResponse{Supported: false, Message: "Not Supported"}, nil
+			return &csi.ValidateVolumeCapabilitiesResponse{Message: "Not Supported"}, nil
 		}
 	}
-	return &csi.ValidateVolumeCapabilitiesResponse{Supported: true, Message: ""}, nil
+
+	return &csi.ValidateVolumeCapabilitiesResponse{
+		Confirmed: &csi.ValidateVolumeCapabilitiesResponse_Confirmed{
+			VolumeCapabilities: req.VolumeCapabilities,
+		},
+	}, nil
 }

@@ -1,12 +1,9 @@
 /*
 Copyright 2017 The Kubernetes Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -19,7 +16,7 @@ package chubaofs
 import (
 	"fmt"
 	"github.com/chubaofs/chubaofs-csi/pkg/csi-common"
-	"github.com/container-storage-interface/spec/lib/go/csi/v0"
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/glog"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -70,8 +67,7 @@ func NewDriver(driverName, version, nodeID, kubeconfig string) (*driver, error) 
 func initClientSet(kubeconfig string) (*kubernetes.Clientset, error) {
 	var config *rest.Config
 	var err error
-	exists, _ := pathExists(kubeconfig)
-	if exists {
+	if kubeconfig != "" {
 		// creates the out-of-cluster config
 		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
 	} else {
@@ -86,13 +82,6 @@ func initClientSet(kubeconfig string) (*kubernetes.Clientset, error) {
 	return kubernetes.NewForConfig(config)
 }
 
-func NewControllerServer(d *driver) *controllerServer {
-	return &controllerServer{
-		DefaultControllerServer: csicommon.NewDefaultControllerServer(d.CSIDriver),
-		driver:                  d,
-	}
-}
-
 func NewNodeServer(d *driver) *nodeServer {
 	return &nodeServer{
 		DefaultNodeServer: csicommon.NewDefaultNodeServer(d.CSIDriver),
@@ -102,6 +91,13 @@ func NewNodeServer(d *driver) *nodeServer {
 func NewIdentityServer(d *driver) *identityServer {
 	return &identityServer{
 		DefaultIdentityServer: csicommon.NewDefaultIdentityServer(d.CSIDriver),
+	}
+}
+
+func NewControllerServer(d *driver) *controllerServer {
+	return &controllerServer{
+		DefaultControllerServer: csicommon.NewDefaultControllerServer(d.CSIDriver),
+		driver:                  d,
 	}
 }
 

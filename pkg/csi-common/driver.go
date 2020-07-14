@@ -18,12 +18,13 @@ package csicommon
 
 import (
 	"fmt"
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/golang/glog"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"k8s.io/client-go/kubernetes"
 
-	"github.com/container-storage-interface/spec/lib/go/csi/v0"
+	"github.com/container-storage-interface/spec/lib/go/csi"
 )
 
 type CSIDriver struct {
@@ -31,13 +32,14 @@ type CSIDriver struct {
 	NodeID    string
 	Version   string
 	ClientSet *kubernetes.Clientset
-	cap       []*csi.ControllerServiceCapability
-	vc        []*csi.VolumeCapability_AccessMode
+
+	cap []*csi.ControllerServiceCapability
+	vc  []*csi.VolumeCapability_AccessMode
 }
 
 // Creates a NewCSIDriver object. Assumes vendor version is equal to driver version &
 // does not support optional driver plugin info manifest field. Refer to CSI spec for more details.
-func NewCSIDriver(name, version, nodeID string, clientSet *kubernetes.Clientset) *CSIDriver {
+func NewCSIDriver(name string, v string, nodeID string, clientSet *kubernetes.Clientset) *CSIDriver {
 	if name == "" {
 		glog.Errorf("Driver name missing")
 		return nil
@@ -48,14 +50,14 @@ func NewCSIDriver(name, version, nodeID string, clientSet *kubernetes.Clientset)
 		return nil
 	}
 	// TODO version format and validation
-	if len(version) == 0 {
+	if len(v) == 0 {
 		glog.Errorf("Version argument missing")
 		return nil
 	}
 
 	driver := CSIDriver{
 		Name:      name,
-		Version:   version,
+		Version:   v,
 		NodeID:    nodeID,
 		ClientSet: clientSet,
 	}

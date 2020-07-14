@@ -16,7 +16,9 @@ limitations under the License.
 
 package chubaofs
 
-import csicommon "github.com/chubaofs/chubaofs-csi/pkg/csi-common"
+import (
+	csicommon "github.com/chubaofs/chubaofs-csi/pkg/csi-common"
+)
 
 type identityServer struct {
 	*csicommon.DefaultIdentityServer

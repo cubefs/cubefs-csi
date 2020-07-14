@@ -4,23 +4,24 @@ ChubaoFS Container Storage Interface (CSI) plugins.
 
 ## Prerequisite
 
-* Kubernetes 1.12.5
+* Kubernetes 1.16.0
 * ChubaoFS 2.0.0
-* CSI spec version 0.3.0
-
-> CSI v0.x is no longer supported as of Kubernetes v1.17 in accordance with deprecation policy set out in Kubernetes v1.13
-
-## Enable privileged Pods
-
-ChubaoFS CSI driver will use client-go to connect the Kubernetes API Server. First you need to get the kubeconfig file path, and then execute the following command:
-
-```
-$ kubectl create configmap csi-kube-config --from-file=config=/root/.kube/config
-```
+* CSI spec version 1.1.0
 
 ## Prepare on-premise ChubaoFS cluster
 
 An on-premise ChubaoFS cluster can be deployed separately, or within the same Kubernetes cluster as applications which require persistent volumes. Please refer to [chubaofs-helm](https://github.com/chubaofs/chubaofs-helm) for more details on deployment using Helm.
+
+## Add labels to Kubernetes node
+
+You should tag each Kubernetes node with the appropriate labels accorindly for CSI node of ChubaoFS.
+`deploy/csi-controller-deployment.yaml` and `deploy/csi-node-daemonset.yaml` have `nodeSelector` element, 
+so you should add a label for nodes. If you want using ChubaoFS CSI in whole kubernetes cluster, you can delete `nodeSelector` element.
+
+```
+kubectl label node <nodename> chubaofs-csi-controller=enabled
+kubectl label node <nodename> chubaofs-csi-node=enabled
+```
 
 ## Deploy the CSI driver
 
