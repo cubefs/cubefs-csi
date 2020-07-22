@@ -60,13 +60,11 @@ spec:
             - mountPath: /csi
               name: socket-dir
         - name: cfs-driver
-          image: chubaofs/cfs-csi-driver:3.0.1
+          image: chubaofs/cfs-csi-driver:3.0.2
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
-          command:
-            - /bin/tini
-            - "--"
+          args:
             - bash
             - "-c"
             - |-

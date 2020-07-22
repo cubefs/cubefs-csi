@@ -23,39 +23,42 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"k8s.io/utils/mount"
 	"sync"
 	"time"
 )
 
 type nodeServer struct {
 	*csicommon.DefaultNodeServer
-	mutex sync.RWMutex
+	mounter mount.Interface
+	mutex   sync.RWMutex
 }
 
 func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
 	ns.mutex.Lock()
 	defer ns.mutex.Unlock()
+	start := time.Now()
 	stagingTargetPath := req.GetStagingTargetPath()
 	targetPath := req.GetTargetPath()
-	if err := createMountPoint(targetPath); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
-	}
 
-	hasMount, err := isMountPoint(targetPath)
+	err := mount.CleanupMountPoint(targetPath, ns.mounter, false)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "check isMountPoint[%v] error: %v", targetPath, err)
+		return nil, status.Errorf(codes.Internal, "CleanupMountPoint fail, targetPath:%v error: %v", targetPath, err)
 	}
 
-	if hasMount {
-		return &csi.NodePublishVolumeResponse{}, nil
+	err = createMountPoint(targetPath)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "createMountPoint fail, targetPath:%s error: %v", targetPath, err)
 	}
 
 	err = bindMount(stagingTargetPath, targetPath)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "mount bind fail. stagingTargetPath[%v], targetPath[%v] error:%v",
+		return nil, status.Errorf(codes.Internal, "mount bind fail. stagingTargetPath:%v, targetPath:%v error:%v",
 			stagingTargetPath, targetPath, err)
 	}
 
+	duration := time.Since(start)
+	glog.Infof("NodePublishVolume mount success, targetPath:%v cost:%v", targetPath, duration)
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 
@@ -63,19 +66,9 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	ns.mutex.Lock()
 	defer ns.mutex.Unlock()
 	targetPath := req.GetTargetPath()
-	hasMount, err := isMountPoint(targetPath)
-	if err != nil || !hasMount {
-		glog.Warningf("targetPath is already not a MountPoint, path:%v error:%v", targetPath, err)
-		return &csi.NodeUnpublishVolumeResponse{}, nil
-	}
-
-	err = umountVolume(targetPath)
+	err := mount.CleanupMountPoint(targetPath, ns.mounter, false)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "umount targetPath[%v] fail, error: %v", targetPath, err)
-	}
-
-	if err = CleanPath(targetPath); err != nil {
-		glog.Warningf("remove targetPath: %v with error: %v", targetPath, err)
+		return nil, err
 	}
 
 	return &csi.NodeUnpublishVolumeResponse{}, nil
@@ -86,18 +79,23 @@ func (ns *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVol
 	defer ns.mutex.Unlock()
 	start := time.Now()
 	stagingTargetPath := req.GetStagingTargetPath()
-	err := createMountPoint(stagingTargetPath)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "createMountPoint[%v] fail, error: %v", stagingTargetPath, err)
-	}
 
-	hasMount, err := isMountPoint(stagingTargetPath)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "check isMountPoint[%v] error: %v", stagingTargetPath, err)
-	}
-
-	if hasMount {
+	pathExists, pathErr := mount.PathExists(stagingTargetPath)
+	corruptedMnt := mount.IsCorruptedMnt(pathErr)
+	if pathExists && !corruptedMnt {
+		duration := time.Since(start)
+		glog.Infof("NodeStageVolume already mount, stagingTargetPath:%v cost:%v", stagingTargetPath, duration)
 		return &csi.NodeStageVolumeResponse{}, nil
+	}
+
+	err := mount.CleanupMountPoint(stagingTargetPath, ns.mounter, false)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "CleanupMountPoint fail, stagingTargetPath:%v error: %v", stagingTargetPath, err)
+	}
+
+	err = createMountPoint(stagingTargetPath)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "createMountPoint fail, stagingTargetPath:%v error: %v", stagingTargetPath, err)
 	}
 
 	volumeName := req.GetVolumeId()
@@ -117,8 +115,7 @@ func (ns *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVol
 	}
 
 	duration := time.Since(start)
-	glog.Infof("NodeStageVolume stagingTargetPath:%v cost time:%v", stagingTargetPath, duration)
-
+	glog.Infof("NodeStageVolume mount, stagingTargetPath:%v cost:%v", stagingTargetPath, duration)
 	return &csi.NodeStageVolumeResponse{}, nil
 }
 
@@ -126,27 +123,15 @@ func (ns *nodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstag
 	ns.mutex.Lock()
 	defer ns.mutex.Unlock()
 	stagingTargetPath := req.GetStagingTargetPath()
-	hasMount, err := isMountPoint(stagingTargetPath)
-	if err != nil || !hasMount {
-		glog.Warningf("stagingTargetPath is already not a MountPoint, path:%v, error: %v", stagingTargetPath, err)
-		return &csi.NodeUnstageVolumeResponse{}, nil
-	}
-
-	err = umountVolume(stagingTargetPath)
+	err := mount.CleanupMountPoint(stagingTargetPath, ns.mounter, false)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "umount stagingTargetPath[%v] fail, error: %v", stagingTargetPath, err)
-	}
-
-	if err = CleanPath(stagingTargetPath); err != nil {
-		glog.Warningf("remove stagingTargetPath: %v with error: %v", stagingTargetPath, err)
+		return nil, err
 	}
 
 	return &csi.NodeUnstageVolumeResponse{}, nil
 }
 
 func (ns *nodeServer) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
-	monitor := NewMountPointerMonitor(&ns.mutex)
-	go monitor.checkInvalidMountPointPeriod()
 	return &csi.NodeGetInfoResponse{
 		NodeId: ns.Driver.NodeID,
 	}, nil

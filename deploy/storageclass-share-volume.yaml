@@ -14,7 +14,7 @@ parameters:
   # Resource manager IP address or URL
   masterAddr: "master-service.chubaofs.svc.cluster.local:17010"
   # Consul Service IP address or URL
-  consulAddr: "consul-service.chubaofs.svc.cluster.local:8500"
+  consulAddr: "http://consul-service.chubaofs.svc.cluster.local:8500"
   # Owner name as authentication
   owner: "csiuser"
   crossZone: "false"
