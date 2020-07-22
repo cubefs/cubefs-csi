@@ -28,6 +28,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/utils/mount"
 )
 
 type driver struct {
@@ -70,8 +71,7 @@ func NewDriver(driverName, version, nodeID, kubeconfig string) (*driver, error) 
 func initClientSet(kubeconfig string) (*kubernetes.Clientset, error) {
 	var config *rest.Config
 	var err error
-	exists, _ := pathExists(kubeconfig)
-	if exists {
+	if kubeconfig != "" {
 		// creates the out-of-cluster config
 		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
 	} else {
@@ -96,6 +96,7 @@ func NewControllerServer(d *driver) *controllerServer {
 func NewNodeServer(d *driver) *nodeServer {
 	return &nodeServer{
 		DefaultNodeServer: csicommon.NewDefaultNodeServer(d.CSIDriver),
+		mounter:           mount.New(""),
 	}
 }
 
