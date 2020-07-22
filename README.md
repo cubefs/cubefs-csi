@@ -5,7 +5,6 @@ ChubaoFS Container Storage Interface (CSI) plugins.
 ## Prerequisite
 
 * Kubernetes 1.16.0
-* ChubaoFS 2.0.0
 * CSI spec version 1.1.0
 
 ## Prepare on-premise ChubaoFS cluster
@@ -57,7 +56,7 @@ provisioner: csi.chubaofs.com
 reclaimPolicy: Delete
 parameters:
   masterAddr: "master-service.chubaofs.svc.cluster.local:17010"
-  consulAddr: "consul-service.chubaofs.svc.cluster.local:8500"
+  consulAddr: "http://consul-service.chubaofs.svc.cluster.local:8500"
   owner: "csiuser"
   logLevel: "debug"
 ```

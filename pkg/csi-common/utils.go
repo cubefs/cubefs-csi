@@ -76,13 +76,12 @@ func RunControllerandNodePublishServer(endpoint string, ids csi.IdentityServer, 
 }
 
 func logGRPC(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	glog.V(3).Infof("GRPC call: %s", info.FullMethod)
-	glog.V(5).Infof("GRPC request: %s", protosanitizer.StripSecrets(req))
+	glog.V(5).Infof("GRPC request: %s body: %s", info.FullMethod, protosanitizer.StripSecrets(req))
 	resp, err := handler(ctx, req)
 	if err != nil {
 		glog.Errorf("GRPC error: %v", err)
 	} else {
-		glog.V(5).Infof("GRPC response: %s", protosanitizer.StripSecrets(resp))
+		glog.V(5).Infof("GRPC response: %s return: %s", info.FullMethod, protosanitizer.StripSecrets(resp))
 	}
 	return resp, err
 }

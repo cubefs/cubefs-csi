@@ -25,6 +25,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/utils/mount"
 )
 
 type driver struct {
@@ -85,6 +86,7 @@ func initClientSet(kubeconfig string) (*kubernetes.Clientset, error) {
 func NewNodeServer(d *driver) *nodeServer {
 	return &nodeServer{
 		DefaultNodeServer: csicommon.NewDefaultNodeServer(d.CSIDriver),
+		mounter:           mount.New(""),
 	}
 }
 
