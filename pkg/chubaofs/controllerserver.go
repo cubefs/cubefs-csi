@@ -17,7 +17,7 @@ limitations under the License.
 package chubaofs
 
 import (
-	"github.com/chubaofs/chubaofs-csi/pkg/csi-common"
+	csicommon "github.com/chubaofs/chubaofs-csi/pkg/csi-common"
 	"github.com/container-storage-interface/spec/lib/go/csi/v0"
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
@@ -60,7 +60,7 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		Volume: &csi.Volume{
 			Id:            volName,
 			CapacityBytes: capacity,
-			Attributes:    req.GetParameters(),
+			Attributes:    cfsServer.clientConf,
 		},
 	}, nil
 }
