@@ -60,7 +60,7 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		Volume: &csi.Volume{
 			VolumeId:      volName,
 			CapacityBytes: capacity,
-			VolumeContext: req.GetParameters(),
+			VolumeContext: cfsServer.clientConf,
 		},
 	}, nil
 }

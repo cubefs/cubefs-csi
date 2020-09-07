@@ -21,20 +21,27 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	csicommon "github.com/chubaofs/chubaofs-csi/pkg/csi-common"
 	"github.com/golang/glog"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 )
 
 const (
 	KVolumeName    = "volName"
 	KMasterAddr    = "masterAddr"
-	KlogLevel      = "logLevel"
+	KLogLevel      = "logLevel"
+	KLogDir        = "logDir"
 	KOwner         = "owner"
+	KMountPoint    = "mountPoint"
+	KExporterPort  = "exporterPort"
+	KProfPort      = "profPort"
 	KCrossZone     = "crossZone"
 	KEnableToken   = "enableToken"
 	KZoneName      = "zoneName"
@@ -65,39 +72,8 @@ const (
 )
 
 type cfsServer struct {
-	masterAddr     string
-	volName        string
-	owner          string
 	clientConfFile string
-	crossZone      string
-	enableToken    string
-	zoneName       string
-	clientConf     *cfsClientConf
-}
-
-type cfsClientConf struct {
-	MasterAddr    string `json:"masterAddr"`
-	VolName       string `json:"volName"`
-	Owner         string `json:"owner"`
-	LogDir        string `json:"logDir"`
-	MountPoint    string `json:"mountPoint"`
-	LogLevel      string `json:"logLevel"`
-	ConsulAddr    string `json:"consulAddr,omitempty"`
-	ExporterPort  int    `json:"exporterPort"`
-	ProfPort      int    `json:"profPort"`
-	LookupValid   string `json:"lookupValid,omitempty"`
-	AttrValid     string `json:"attrValid,omitempty"`
-	IcacheTimeout string `json:"icacheTimeout,omitempty"`
-	EnSyncWrite   string `json:"enSyncWrite,omitempty"`
-	AutoInvalData string `json:"autoInvalData,omitempty"`
-	Rdonly        string `json:"rdonly,omitempty"`
-	Writecache    string `json:"writecache,omitempty"`
-	Keepcache     string `json:"keepcache,omitempty"`
-	Authenticate  string `json:"authenticate,omitempty"`
-	TicketHosts   string `json:"ticketHost,omitempty"`
-	EnableHTTPS   string `json:"enableHTTPS,omitempty"`
-	AccessKey     string `json:"accessKey,omitempty"`
-	SecretKey     string `json:"secretKey,omitempty"`
+	clientConf     map[string]string
 }
 
 // Create and Delete Volume Response
@@ -115,57 +91,34 @@ func newCfsServer(volName string, param map[string]string) (cs *cfsServer, err e
 
 	newVolName := getValueWithDefault(param, KVolumeName, volName)
 	clientConfFile := defaultClientConfPath + newVolName + jsonFileSuffix
-	logDir := defaultLogDir + newVolName
-	owner := getValueWithDefault(param, KOwner, defaultOwner)
-	crossZone := getValueWithDefault(param, KCrossZone, "false")
-	enableToken := getValueWithDefault(param, KEnableToken, "false")
-	zoneName := getValue(param, KZoneName)
-
-	logLevel := getValueWithDefault(param, KlogLevel, defaultLogLevel)
-	consulAddr := getValue(param, KConsulAddr)
-	lookupValid := getValue(param, KLookupValid)
-	attrValid := getValue(param, KAttrValid)
-	icacheTimeout := getValue(param, KIcacheTimeout)
-	enSyncWrite := getValue(param, KEnSyncWrite)
-	autoInvalData := getValue(param, KAutoInvalData)
-	rdonly := getValueWithDefault(param, KRdonly, "false")
-	writecache := getValue(param, KWritecache)
-	keepcache := getValue(param, KKeepcache)
-	authenticate := getValueWithDefault(param, KAuthenticate, "false")
-	ticketHost := getValue(param, KTicketHosts)
-	enableHTTPS := getValueWithDefault(param, KEnableHTTPS, "false")
-	accessKey := getValue(param, KAccessKey)
-	secretKey := getValue(param, KSecretKey)
+	newOwner := csicommon.ShortenString(fmt.Sprintf("csi_%d", time.Now().UnixNano()), 20)
+	clientConf := make(map[string]string)
+	clientConf[KMasterAddr] = masterAddr
+	clientConf[KVolumeName] = newVolName
+	clientConf[KOwner] = getValueWithDefault(param, KOwner, newOwner)
+	clientConf[KLogLevel] = getValueWithDefault(param, KLogLevel, defaultLogLevel)
+	clientConf[KLogDir] = defaultLogDir + newVolName
+	clientConf[KZoneName] = getValue(param, KZoneName)
+	clientConf[KCrossZone] = getValueWithDefault(param, KCrossZone, "false")
+	clientConf[KConsulAddr] = getValue(param, KConsulAddr)
+	clientConf[KEnableToken] = getValueWithDefault(param, KEnableToken, "false")
+	clientConf[KLookupValid] = getValue(param, KLookupValid)
+	clientConf[KAttrValid] = getValue(param, KAttrValid)
+	clientConf[KIcacheTimeout] = getValue(param, KIcacheTimeout)
+	clientConf[KEnSyncWrite] = getValue(param, KEnSyncWrite)
+	clientConf[KAutoInvalData] = getValue(param, KAutoInvalData)
+	clientConf[KRdonly] = getValueWithDefault(param, KRdonly, "false")
+	clientConf[KWritecache] = getValue(param, KWritecache)
+	clientConf[KKeepcache] = getValue(param, KKeepcache)
+	clientConf[KAuthenticate] = getValueWithDefault(param, KAuthenticate, "false")
+	clientConf[KTicketHosts] = getValue(param, KTicketHosts)
+	clientConf[KEnableHTTPS] = getValueWithDefault(param, KEnableHTTPS, "false")
+	clientConf[KAccessKey] = getValue(param, KAccessKey)
+	clientConf[KSecretKey] = getValue(param, KSecretKey)
 
 	return &cfsServer{
-		masterAddr:     masterAddr,
-		volName:        newVolName,
-		owner:          owner,
-		crossZone:      crossZone,
-		enableToken:    enableToken,
-		zoneName:       zoneName,
 		clientConfFile: clientConfFile,
-		clientConf: &cfsClientConf{
-			MasterAddr:    masterAddr,
-			VolName:       newVolName,
-			Owner:         owner,
-			LogLevel:      logLevel,
-			ConsulAddr:    consulAddr,
-			LogDir:        logDir,
-			LookupValid:   lookupValid,
-			AttrValid:     attrValid,
-			IcacheTimeout: icacheTimeout,
-			EnSyncWrite:   enSyncWrite,
-			AutoInvalData: autoInvalData,
-			Rdonly:        rdonly,
-			Writecache:    writecache,
-			Keepcache:     keepcache,
-			Authenticate:  authenticate,
-			TicketHosts:   ticketHost,
-			EnableHTTPS:   enableHTTPS,
-			AccessKey:     accessKey,
-			SecretKey:     secretKey,
-		},
+		clientConf:     clientConf,
 	}, err
 }
 
@@ -183,24 +136,26 @@ func getValueWithDefault(param map[string]string, key string, defaultValue strin
 }
 
 func (cs *cfsServer) persistClientConf(mountPoint string) error {
-	cs.clientConf.MountPoint = mountPoint
-	cs.clientConf.ExporterPort, _ = getFreePort(defaultExporterPort)
-	cs.clientConf.ProfPort, _ = getFreePort(defaultProfPort)
-	_ = os.Mkdir(cs.clientConf.LogDir, 0777)
+	exporterPort, _ := getFreePort(defaultExporterPort)
+	profPort, _ := getFreePort(defaultProfPort)
+	cs.clientConf[KMountPoint] = mountPoint
+	cs.clientConf[KExporterPort] = strconv.Itoa(exporterPort)
+	cs.clientConf[KProfPort] = strconv.Itoa(profPort)
+	_ = os.Mkdir(cs.clientConf[KLogDir], 0777)
 	clientConfBytes, _ := json.Marshal(cs.clientConf)
 	err := ioutil.WriteFile(cs.clientConfFile, clientConfBytes, 0444)
 	if err != nil {
 		return status.Errorf(codes.Internal, "create client config file fail. err: %v", err.Error())
 	}
 
-	glog.V(0).Infof("create client config file success, volumeId:%v", cs.volName)
+	glog.V(0).Infof("create client config file success, volumeId:%v", cs.clientConf[KVolumeName])
 	return nil
 }
 
 func (cs *cfsServer) createVolume(capacityGB int64) error {
-	masterAddr := strings.Split(cs.masterAddr, ",")[0]
+	masterAddr := strings.Split(cs.clientConf[KMasterAddr], ",")[0]
 	url := fmt.Sprintf("http://%s/admin/createVol?name=%s&capacity=%v&owner=%v&crossZone=%v&enableToken=%v&zoneName=%v",
-		masterAddr, cs.volName, capacityGB, cs.owner, cs.crossZone, cs.enableToken, cs.zoneName)
+		masterAddr, cs.clientConf[KVolumeName], capacityGB, cs.clientConf[KOwner], cs.clientConf[KCrossZone], cs.clientConf[KEnableToken], cs.clientConf[KZoneName])
 	glog.Infof("createVol url: %v", url)
 	resp, err := cs.executeRequest(url)
 	if err != nil {
@@ -221,11 +176,11 @@ func (cs *cfsServer) createVolume(capacityGB int64) error {
 
 func (cs *cfsServer) deleteVolume() error {
 	key := md5.New()
-	if _, err := key.Write([]byte(cs.owner)); err != nil {
+	if _, err := key.Write([]byte(cs.clientConf[KOwner])); err != nil {
 		return status.Errorf(codes.Internal, "deleteVolume failed to get md5 sum, err(%v)", err)
 	}
 
-	url := fmt.Sprintf("http://%s/vol/delete?name=%s&authKey=%v", cs.masterAddr, cs.volName, hex.EncodeToString(key.Sum(nil)))
+	url := fmt.Sprintf("http://%s/vol/delete?name=%s&authKey=%v", cs.clientConf[KMasterAddr], cs.clientConf[KVolumeName], hex.EncodeToString(key.Sum(nil)))
 	glog.Infof("deleteVol url: %v", url)
 	resp, err := cs.executeRequest(url)
 	if err != nil {
