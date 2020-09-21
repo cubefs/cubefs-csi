@@ -36,14 +36,14 @@ var (
 
 func NewFakeDriver() *CSIDriver {
 
-	driver := NewCSIDriver(fakeDriverName, vendorVersion, fakeNodeID)
+	driver := NewCSIDriver(fakeDriverName, vendorVersion, fakeNodeID, nil)
 
 	return driver
 }
 
 func TestNewFakeDriver(t *testing.T) {
 	// Test New fake driver with invalid arguments.
-	d := NewCSIDriver("", vendorVersion, fakeNodeID)
+	d := NewCSIDriver("", vendorVersion, fakeNodeID, nil)
 	assert.Nil(t, d)
 }
 
