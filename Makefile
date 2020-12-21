@@ -9,7 +9,7 @@ all: build
 # dep ensure -vendor-only
 build:
 	@{ cd build; ./build_cfs_client.sh; }
-	@{ cd build; ./build_cfs_node_driver.sh; }
+	@{ cd build; ./build_cfs_csi_driver.sh; }
 
 image: build
 	@docker build -t $(IMAGE_TAG) ./build
