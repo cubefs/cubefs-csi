@@ -90,6 +90,8 @@ spec:
             - mountPath: /var/lib/kubelet/pods
               mountPropagation: Bidirectional
               name: mountpoint-dir
+            - name: cfsclientbin
+              mountPath: /cfs/newbin/
       volumes:
         - hostPath:
             path: /var/lib/kubelet/plugins/csi.chubaofs.com
@@ -103,3 +105,5 @@ spec:
             path: /var/lib/kubelet/pods
             type: Directory
           name: mountpoint-dir
+	- name: cfsclientbin
+          emptyDir: {}

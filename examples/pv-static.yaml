@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: cfs-pv-static
+spec:
+  accessModes:
+    - ReadWriteMany
+  capacity:
+    storage: 5Gi
+  claimRef:
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    name: cfs-pvc-static
+    namespace: default
+  csi:
+    driver: csi.chubaofs.com
+    fsType: ext4
+    volumeAttributes:
+      masterAddr: master-service.chubaofs.svc.cluster.local:17010
+      owner: csiuser2
+      volName: pvc-static-vol
+      logDir: /cfs/logs/pvc-85e425bb-4d68-42df-bb5b-b7dc5057c022
+      logLevel: error
+      zoneName: ""
+    volumeHandle: pvc-static-vol
+  persistentVolumeReclaimPolicy: Retain
+  volumeMode: Filesystem
+
+

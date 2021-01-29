@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: cfs-csi-demo-share-volume
+  name: cfs-csi-static-demo
   namespace: default
 spec:
   replicas: 1
@@ -26,8 +26,8 @@ spec:
               name: "http-server"
           volumeMounts:
             - mountPath: "/usr/share/nginx/html"
-              name: mypvc
+              name: mystaticpvc
       volumes:
-        - name: mypvc
+        - name: mystaticpvc
           persistentVolumeClaim:
-            claimName: cfs-pvc-share-volume
+            claimName: cfs-pvc-static
