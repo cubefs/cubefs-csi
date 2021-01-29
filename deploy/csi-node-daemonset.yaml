@@ -48,7 +48,7 @@ spec:
             - mountPath: /registration
               name: registration-dir
         - name: cfs-driver
-          image: chubaofs/cfs-csi-driver:2.2.2.110.0
+          image: chubaofs/cfs-csi-driver:2.2.2.110.4
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
@@ -90,8 +90,6 @@ spec:
             - mountPath: /var/lib/kubelet/pods
               mountPropagation: Bidirectional
               name: mountpoint-dir
-            - name: cfsclientbin
-              mountPath: /cfs/newbin/
       volumes:
         - hostPath:
             path: /var/lib/kubelet/plugins/csi.chubaofs.com
@@ -105,5 +103,3 @@ spec:
             path: /var/lib/kubelet/pods
             type: Directory
           name: mountpoint-dir
-	- name: cfsclientbin
-          emptyDir: {}

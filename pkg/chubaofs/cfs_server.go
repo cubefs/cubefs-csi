@@ -62,13 +62,13 @@ const (
 )
 
 const (
-	defaultOwner              = "csi-user"
 	defaultClientConfPath     = "/cfs/conf/"
 	defaultLogDir             = "/cfs/logs/"
 	defaultExporterPort   int = 9513
 	defaultProfPort       int = 10094
 	defaultLogLevel           = "info"
 	jsonFileSuffix            = ".json"
+	defaultConsulAddr         = "http://consul-service.chubaofs.svc.cluster.local:8500"
 )
 
 type cfsServer struct {
@@ -100,7 +100,7 @@ func newCfsServer(volName string, param map[string]string) (cs *cfsServer, err e
 	clientConf[KLogDir] = defaultLogDir + newVolName
 	clientConf[KZoneName] = getValue(param, KZoneName)
 	clientConf[KCrossZone] = getValueWithDefault(param, KCrossZone, "false")
-	clientConf[KConsulAddr] = getValue(param, KConsulAddr)
+	clientConf[KConsulAddr] = getValueWithDefault(param, KConsulAddr, defaultConsulAddr)
 	clientConf[KEnableToken] = getValueWithDefault(param, KEnableToken, "false")
 	clientConf[KLookupValid] = getValue(param, KLookupValid)
 	clientConf[KAttrValid] = getValue(param, KAttrValid)
@@ -175,12 +175,13 @@ func (cs *cfsServer) createVolume(capacityGB int64) error {
 }
 
 func (cs *cfsServer) deleteVolume() error {
-	key := md5.New()
-	if _, err := key.Write([]byte(cs.clientConf[KOwner])); err != nil {
-		return status.Errorf(codes.Internal, "deleteVolume failed to get md5 sum, err(%v)", err)
+	ownerMd5, err := cs.getOwnerMd5()
+	if err != nil {
+		return err
 	}
 
-	url := fmt.Sprintf("http://%s/vol/delete?name=%s&authKey=%v", cs.clientConf[KMasterAddr], cs.clientConf[KVolumeName], hex.EncodeToString(key.Sum(nil)))
+	url := fmt.Sprintf("http://%s/vol/delete?name=%s&authKey=%v",
+		cs.clientConf[KMasterAddr], cs.clientConf[KVolumeName], ownerMd5)
 	glog.Infof("deleteVol url: %v", url)
 	resp, err := cs.executeRequest(url)
 	if err != nil {
@@ -221,4 +222,40 @@ func (cs *cfsServer) executeRequest(url string) (*cfsServerResponse, error) {
 
 func (cs *cfsServer) runClient() error {
 	return mountVolume(cs.clientConfFile)
+}
+
+func (cs *cfsServer) expendVolume(capacityGB int64) error {
+	ownerMd5, err := cs.getOwnerMd5()
+	if err != nil {
+		return err
+	}
+
+	volName := cs.clientConf[KVolumeName]
+	url := fmt.Sprintf("http://%s/vol/expand?name=%s&authKey=%v&capacity=%v",
+		cs.clientConf[KMasterAddr], volName, ownerMd5, capacityGB)
+	glog.Infof("expendVolume url: %v", url)
+	resp, err := cs.executeRequest(url)
+	if err != nil {
+		glog.Fatalf("delete volume[%v] fail. url:%v error:%v", volName, url, err)
+		return err
+	}
+
+	if resp.Code != 0 {
+		glog.Errorf("expend volume[%v] fail. code:%v, msg:%v", volName, resp.Code, resp.Msg)
+		return fmt.Errorf("expend volume[%v] fail", volName)
+	}
+
+	return nil
+
+	return nil
+}
+
+func (cs *cfsServer) getOwnerMd5() (string, error) {
+	owner := cs.clientConf[KOwner]
+	key := md5.New()
+	if _, err := key.Write([]byte(owner)); err != nil {
+		return "", status.Errorf(codes.Internal, "calc owner[%v] md5 fail. err(%v)", owner, err)
+	}
+
+	return hex.EncodeToString(key.Sum(nil)), nil
 }

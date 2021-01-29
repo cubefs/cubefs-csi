@@ -23,6 +23,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"time"
 )
 
@@ -103,5 +104,30 @@ func (cs *controllerServer) ValidateVolumeCapabilities(ctx context.Context, req 
 		Confirmed: &csi.ValidateVolumeCapabilitiesResponse_Confirmed{
 			VolumeCapabilities: req.VolumeCapabilities,
 		},
+	}, nil
+}
+
+func (cs *controllerServer) ControllerExpandVolume(ctx context.Context, req *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
+	pvName := req.VolumeId
+	pv, err := cs.driver.ClientSet.CoreV1().PersistentVolumes().Get(pvName, metav1.GetOptions{})
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "Not found PersistentVolumes[%v], error:%v", pvName, err)
+	}
+
+	attr := pv.Spec.CSI.VolumeAttributes
+	cfsServer, err := newCfsServer(pvName, attr)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "newCfsServer[%v] error:%v", pvName, err)
+	}
+
+	capacityGB := req.CapacityRange.RequiredBytes >> 30
+	err = cfsServer.expendVolume(capacityGB)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "expendVolume[%v] error:%v", pvName, err)
+	}
+
+	return &csi.ControllerExpandVolumeResponse{
+		CapacityBytes:         req.CapacityRange.RequiredBytes,
+		NodeExpansionRequired: false,
 	}, nil
 }
