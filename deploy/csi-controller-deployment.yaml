@@ -59,8 +59,27 @@ spec:
           volumeMounts:
             - mountPath: /csi
               name: socket-dir
+        - name: csi-resizer
+          image: quay.io/k8scsi/csi-resizer:v0.5.0
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+          args:
+            - --csi-address=$(ADDRESS)
+          env:
+            - name: TZ
+              value: Asia/Shanghai
+            - name: ADDRESS
+              value: /csi/csi-controller.sock
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+          volumeMounts:
+            - mountPath: /csi
+              name: socket-dir
         - name: cfs-driver
-          image: chubaofs/cfs-csi-driver:2.2.2.110.0
+          image: chubaofs/cfs-csi-driver:2.2.2.110.4
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
