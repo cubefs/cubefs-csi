@@ -1,0 +1,44 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: cfs-sc
+  namespace: default
+provisioner: csi.chubaofs.com
+allowVolumeExpansion: true
+reclaimPolicy: Delete
+parameters:
+  # Resource manager IP address or URL
+  masterAddr: "master-service.chubaofs.svc.cluster.local:17010"
+  # Owner name as authentication
+  owner: "csiuser"
+  #  consulAddr: "http://consul-service.chubaofs.svc.cluster.local:8500"
+  #  crossZone: "false"
+  #  enableToken: "false"
+  #  zoneName: ""
+  #  logLevel: "error"
+  #  icacheTimeout: ""
+  #  lookupValid: ""
+  #  attrValid: ""
+  #  readRate: ""
+  #  writeRate: ""
+  #  enSyncWrite: ""
+  #  autoInvalData: ""
+  #  rdonly: "false"
+  #  writecache: "false"
+  #  keepcache: "false"
+  #  followerRead: "false"
+  #  authenticate: "false"
+  #  clientKey: ""
+  #  ticketHost: ""
+  #  enableHTTPS: "false"
+  #  token: ""
+  #  accessKey: ""
+  #  secretKey: ""
+  #  disableDcache: "false"
+  #  subdir: ""
+  #  fsyncOnClose: "true"
+  #  maxcpus: ""
+  #  enableXattr: "false"
+  #  alignSize: "4096"
+  #  maxExtentNumPerAlignArea: "12"
+  #  forceAlignMerge: "true"
