@@ -1,0 +1,8 @@
+language: go
+
+go:
+- "1.13"
+
+script:
+  - go test -covermode=count -coverprofile=profile.cov ./pkg/...
+  - make csi-build
