@@ -1,4 +1,8 @@
-# Overview
+[![Build Status](https://travis-ci.org/chubaofs/chubaofs-csi.svg?branch=master)](https://travis-ci.org/chubaofs/chubaofs-csi)
+
+# ChubaoFS CSI Driver
+
+## Overview
 
 ChubaoFS Container Storage Interface (CSI) plugins.
 
