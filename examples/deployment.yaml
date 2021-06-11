@@ -26,6 +26,7 @@ spec:
               name: "http-server"
           volumeMounts:
             - mountPath: "/usr/share/nginx/html"
+              mountPropagation: HostToContainer
               name: mypvc
       volumes:
         - name: mypvc
