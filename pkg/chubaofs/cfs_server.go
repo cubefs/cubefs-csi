@@ -59,6 +59,7 @@ const (
 	KRdonly        = "rdonly"
 	KWritecache    = "writecache"
 	KKeepcache     = "keepcache"
+	KSubdir        = "Subdir"
 )
 
 const (
@@ -99,6 +100,7 @@ func newCfsServer(volName string, param map[string]string) (cs *cfsServer, err e
 	clientConf[KLogLevel] = getValueWithDefault(param, KLogLevel, defaultLogLevel)
 	clientConf[KLogDir] = defaultLogDir + newVolName
 	clientConf[KZoneName] = getValue(param, KZoneName)
+	clientConf[KSubdir] = getValue(param, KSubdir)
 	clientConf[KCrossZone] = getValueWithDefault(param, KCrossZone, "false")
 	clientConf[KConsulAddr] = getValueWithDefault(param, KConsulAddr, defaultConsulAddr)
 	clientConf[KEnableToken] = getValueWithDefault(param, KEnableToken, "false")
