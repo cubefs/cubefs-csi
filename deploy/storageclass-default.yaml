@@ -39,6 +39,7 @@ parameters:
   #  fsyncOnClose: "true"
   #  maxcpus: ""
   #  enableXattr: "false"
+  #  subdir: ""
   #  alignSize: "4096"
   #  maxExtentNumPerAlignArea: "12"
   #  forceAlignMerge: "true"
