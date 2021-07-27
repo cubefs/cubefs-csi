@@ -46,19 +46,6 @@ const (
 	KEnableToken   = "enableToken"
 	KZoneName      = "zoneName"
 	KConsulAddr    = "consulAddr"
-	KAuthenticate  = "authenticate"
-	KTicketHosts   = "ticketHost"
-	KEnableHTTPS   = "enableHTTPS"
-	KAccessKey     = "accessKey"
-	KSecretKey     = "secretKey"
-	KLookupValid   = "lookupValid"
-	KAttrValid     = "attrValid"
-	KIcacheTimeout = "icacheTimeout"
-	KEnSyncWrite   = "enSyncWrite"
-	KAutoInvalData = "autoInvalData"
-	KRdonly        = "rdonly"
-	KWritecache    = "writecache"
-	KKeepcache     = "keepcache"
 )
 
 const (
@@ -73,6 +60,7 @@ const (
 
 type cfsServer struct {
 	clientConfFile string
+	masterAddrs    []string
 	clientConf     map[string]string
 }
 
@@ -92,38 +80,17 @@ func newCfsServer(volName string, param map[string]string) (cs *cfsServer, err e
 	newVolName := getValueWithDefault(param, KVolumeName, volName)
 	clientConfFile := defaultClientConfPath + newVolName + jsonFileSuffix
 	newOwner := csicommon.ShortenString(fmt.Sprintf("csi_%d", time.Now().UnixNano()), 20)
-	clientConf := make(map[string]string)
-	clientConf[KMasterAddr] = masterAddr
-	clientConf[KVolumeName] = newVolName
-	clientConf[KOwner] = getValueWithDefault(param, KOwner, newOwner)
-	clientConf[KLogLevel] = getValueWithDefault(param, KLogLevel, defaultLogLevel)
-	clientConf[KLogDir] = defaultLogDir + newVolName
-	clientConf[KZoneName] = getValue(param, KZoneName)
-	clientConf[KCrossZone] = getValueWithDefault(param, KCrossZone, "false")
-	clientConf[KConsulAddr] = getValueWithDefault(param, KConsulAddr, defaultConsulAddr)
-	clientConf[KEnableToken] = getValueWithDefault(param, KEnableToken, "false")
-	clientConf[KLookupValid] = getValue(param, KLookupValid)
-	clientConf[KAttrValid] = getValue(param, KAttrValid)
-	clientConf[KIcacheTimeout] = getValue(param, KIcacheTimeout)
-	clientConf[KEnSyncWrite] = getValue(param, KEnSyncWrite)
-	clientConf[KAutoInvalData] = getValue(param, KAutoInvalData)
-	clientConf[KRdonly] = getValueWithDefault(param, KRdonly, "false")
-	clientConf[KWritecache] = getValue(param, KWritecache)
-	clientConf[KKeepcache] = getValue(param, KKeepcache)
-	clientConf[KAuthenticate] = getValueWithDefault(param, KAuthenticate, "false")
-	clientConf[KTicketHosts] = getValue(param, KTicketHosts)
-	clientConf[KEnableHTTPS] = getValueWithDefault(param, KEnableHTTPS, "false")
-	clientConf[KAccessKey] = getValue(param, KAccessKey)
-	clientConf[KSecretKey] = getValue(param, KSecretKey)
-
+	param[KMasterAddr] = masterAddr
+	param[KVolumeName] = newVolName
+	param[KOwner] = getValueWithDefault(param, KOwner, newOwner)
+	param[KLogLevel] = getValueWithDefault(param, KLogLevel, defaultLogLevel)
+	param[KLogDir] = defaultLogDir + newVolName
+	param[KConsulAddr] = getValueWithDefault(param, KConsulAddr, defaultConsulAddr)
 	return &cfsServer{
 		clientConfFile: clientConfFile,
-		clientConf:     clientConf,
+		masterAddrs:    strings.Split(masterAddr, ","),
+		clientConf:     param,
 	}, err
-}
-
-func getValue(param map[string]string, key string) string {
-	return getValueWithDefault(param, key, "")
 }
 
 func getValueWithDefault(param map[string]string, key string, defaultValue string) string {
@@ -152,53 +119,74 @@ func (cs *cfsServer) persistClientConf(mountPoint string) error {
 	return nil
 }
 
-func (cs *cfsServer) createVolume(capacityGB int64) error {
-	masterAddr := strings.Split(cs.clientConf[KMasterAddr], ",")[0]
-	url := fmt.Sprintf("http://%s/admin/createVol?name=%s&capacity=%v&owner=%v&crossZone=%v&enableToken=%v&zoneName=%v",
-		masterAddr, cs.clientConf[KVolumeName], capacityGB, cs.clientConf[KOwner], cs.clientConf[KCrossZone], cs.clientConf[KEnableToken], cs.clientConf[KZoneName])
-	glog.Infof("createVol url: %v", url)
-	resp, err := cs.executeRequest(url)
-	if err != nil {
-		return err
-	}
+func (cs *cfsServer) createVolume(capacityGB int64) (err error) {
+	valName := cs.clientConf[KVolumeName]
+	owner := cs.clientConf[KOwner]
+	crossZone := cs.clientConf[KCrossZone]
+	token := cs.clientConf[KEnableToken]
+	zone := cs.clientConf[KZoneName]
+	for _, addr := range cs.masterAddrs {
+		url := fmt.Sprintf("http://%s/admin/createVol?name=%s&capacity=%v&owner=%v&crossZone=%v&enableToken=%v&zoneName=%v",
+			addr, valName, capacityGB, owner, crossZone, token, zone)
+		glog.Infof("createVol url: %v", url)
+		resp, err := cs.executeRequest(url)
+		if err != nil {
+			continue
+		}
 
-	if resp.Code != 0 {
-		if resp.Code == 1 {
-			glog.Warningf("duplicate to create volume. url(%v) code=1 msg:%v", url, resp.Msg)
+		if resp.Code != 0 {
+			if resp.Code == 1 {
+				glog.Warningf("duplicate to create volume. url(%v) code=1 msg:%v", url, resp.Msg)
+				err = nil
+				break
+			} else {
+				glog.Errorf("create volume is failed. url(%v) code=(%v), msg:%v", url, resp.Code, resp.Msg)
+				err = fmt.Errorf("create volume is failed")
+				continue
+			}
 		} else {
-			glog.Errorf("create volume is failed. url(%v) code=(%v), msg:%v", url, resp.Code, resp.Msg)
-			return fmt.Errorf("create volume is failed")
+			err = nil
+			break
 		}
 	}
 
-	return nil
+	return
 }
 
-func (cs *cfsServer) deleteVolume() error {
+func (cs *cfsServer) deleteVolume() (err error) {
 	ownerMd5, err := cs.getOwnerMd5()
 	if err != nil {
 		return err
 	}
 
-	url := fmt.Sprintf("http://%s/vol/delete?name=%s&authKey=%v",
-		cs.clientConf[KMasterAddr], cs.clientConf[KVolumeName], ownerMd5)
-	glog.Infof("deleteVol url: %v", url)
-	resp, err := cs.executeRequest(url)
-	if err != nil {
-		glog.Fatalf("delete volume fail. url:%v error:%v", url, err)
-		return err
-	}
+	valName := cs.clientConf[KVolumeName]
+	for _, addr := range cs.masterAddrs {
+		url := fmt.Sprintf("http://%s/vol/delete?name=%s&authKey=%v", addr, valName, ownerMd5)
+		glog.Infof("deleteVol url: %v", url)
+		resp, err := cs.executeRequest(url)
+		if err != nil {
+			glog.Fatalf("delete volume fail. url:%v error:%v", url, err)
+			continue
+		}
 
-	if resp.Code != 0 {
-		if resp.Code == 7 {
-			glog.Warningf("volume not exists, assuming the volume has already been deleted. code:%v, msg:%v", resp.Code, resp.Msg)
+		if resp.Code != 0 {
+			if resp.Code == 7 {
+				glog.Warningf("volume[%s] not exists, assuming the volume has already been deleted. code:%v, msg:%v",
+					valName, resp.Code, resp.Msg)
+				err = nil
+				break
+			} else {
+				glog.Errorf("delete volume[%s] is failed. code:%v, msg:%v", valName, resp.Code, resp.Msg)
+				err = fmt.Errorf("delete volume is failed")
+				continue
+			}
 		} else {
-			glog.Errorf("delete volume is failed. code:%v, msg:%v", resp.Code, resp.Msg)
-			return fmt.Errorf("delete volume is failed")
+			err = nil
+			break
 		}
 	}
 
-	return nil
+	return
 }
 
 func (cs *cfsServer) executeRequest(url string) (*cfsServerResponse, error) {
@@ -224,30 +212,32 @@ func (cs *cfsServer) runClient() error {
 	return mountVolume(cs.clientConfFile)
 }
 
-func (cs *cfsServer) expendVolume(capacityGB int64) error {
+func (cs *cfsServer) expendVolume(capacityGB int64) (err error) {
 	ownerMd5, err := cs.getOwnerMd5()
 	if err != nil {
 		return err
 	}
 
 	volName := cs.clientConf[KVolumeName]
-	url := fmt.Sprintf("http://%s/vol/expand?name=%s&authKey=%v&capacity=%v",
-		cs.clientConf[KMasterAddr], volName, ownerMd5, capacityGB)
-	glog.Infof("expendVolume url: %v", url)
-	resp, err := cs.executeRequest(url)
-	if err != nil {
-		glog.Fatalf("delete volume[%v] fail. url:%v error:%v", volName, url, err)
-		return err
+	for _, addr := range cs.masterAddrs {
+		url := fmt.Sprintf("http://%s/vol/expand?name=%s&authKey=%v&capacity=%v", addr, volName, ownerMd5, capacityGB)
+		glog.Infof("expendVolume url: %v", url)
+		resp, err := cs.executeRequest(url)
+		if err != nil {
+			glog.Fatalf("delete volume[%v] fail. url:%v error:%v", volName, url, err)
+			continue
+		}
+
+		if resp.Code != 0 {
+			glog.Errorf("expend volume[%v] fail. code:%v, msg:%v", volName, resp.Code, resp.Msg)
+			err = fmt.Errorf("expend volume[%v] fail", volName)
+			continue
+		} else {
+			break
+		}
 	}
 
-	if resp.Code != 0 {
-		glog.Errorf("expend volume[%v] fail. code:%v, msg:%v", volName, resp.Code, resp.Msg)
-		return fmt.Errorf("expend volume[%v] fail", volName)
-	}
-
-	return nil
-
-	return nil
+	return
 }
 
 func (cs *cfsServer) getOwnerMd5() (string, error) {

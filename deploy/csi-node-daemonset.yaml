@@ -48,7 +48,7 @@ spec:
             - mountPath: /registration
               name: registration-dir
         - name: cfs-driver
-          image: chubaofs/cfs-csi-driver:2.4.0.110.4
+          image: chubaofs/cfs-csi-driver:2.4.0.110.5
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
