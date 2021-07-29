@@ -17,15 +17,18 @@ limitations under the License.
 package chubaofs
 
 import (
+	"os"
+	"sync"
+	"time"
+
 	csicommon "github.com/chubaofs/chubaofs-csi/pkg/csi-common"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
+	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/utils/mount"
-	"sync"
-	"time"
 )
 
 type nodeServer struct {
@@ -146,6 +149,87 @@ func (ns *nodeServer) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetC
 						Type: csi.NodeServiceCapability_RPC_STAGE_UNSTAGE_VOLUME,
 					},
 				},
+			},
+			{
+				Type: &csi.NodeServiceCapability_Rpc{
+					Rpc: &csi.NodeServiceCapability_RPC{
+						Type: csi.NodeServiceCapability_RPC_GET_VOLUME_STATS,
+					},
+				},
+			},
+		},
+	}, nil
+}
+
+// NodeGetVolumeStats provides volume space and inodes usage statistics.
+func (ns *nodeServer) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVolumeStatsRequest) (*csi.NodeGetVolumeStatsResponse, error) {
+	if req.GetVolumeId() == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "argument volume id is required")
+	}
+	volumePath := req.GetVolumePath()
+	if volumePath == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "argument volume path is required")
+	}
+
+	isMnt, err := IsMountPoint(volumePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, status.Errorf(codes.InvalidArgument, "volume path %s does not exist", volumePath)
+		}
+
+		return nil, status.Errorf(codes.Internal, "failed to check mount point: %v", err)
+	}
+
+	if !isMnt {
+		return nil, status.Error(codes.InvalidArgument, "volume path is not a valid filesystem mount point")
+	}
+
+	return nodeGetVolumeStats(ctx, volumePath)
+}
+
+// IsMountPoint judges whether the given path is a mount point or not
+func IsMountPoint(p string) (bool, error) {
+	is, err := mount.New("").IsLikelyNotMountPoint(p)
+	if err != nil {
+		return false, err
+	}
+
+	return !is, nil
+}
+
+func nodeGetVolumeStats(_ context.Context, volumePath string) (*csi.NodeGetVolumeStatsResponse, error) {
+	statfs := &unix.Statfs_t{}
+	err := unix.Statfs(volumePath, statfs)
+	if err != nil {
+		return nil, err
+	}
+
+	// Available is blocks available * fragment size
+	available := int64(statfs.Bavail) * int64(statfs.Bsize)
+
+	// Capacity is total block count * fragment size
+	capacity := int64(statfs.Blocks) * int64(statfs.Bsize)
+
+	// Usage is block being used * fragment size (aka block size).
+	usage := (int64(statfs.Blocks) - int64(statfs.Bfree)) * int64(statfs.Bsize)
+
+	inodes := int64(statfs.Files)
+	inodesFree := int64(statfs.Ffree)
+	inodesUsed := inodes - inodesFree
+
+	return &csi.NodeGetVolumeStatsResponse{
+		Usage: []*csi.VolumeUsage{
+			{
+				Available: available,
+				Total:     capacity,
+				Used:      usage,
+				Unit:      csi.VolumeUsage_BYTES,
+			},
+			{
+				Available: inodesFree,
+				Total:     inodes,
+				Used:      inodesUsed,
+				Unit:      csi.VolumeUsage_INODES,
 			},
 		},
 	}, nil
