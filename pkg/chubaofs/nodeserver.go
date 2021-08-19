@@ -35,6 +35,7 @@ import (
 )
 
 type nodeServer struct {
+	Config
 	*csicommon.DefaultNodeServer
 	mounter mount.Interface
 	mutex   sync.RWMutex

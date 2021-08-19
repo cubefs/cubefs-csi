@@ -29,12 +29,9 @@ import (
 )
 
 var (
-	endpoint       string
-	nodeID         string
-	driverName     string
-	version        = "1.0.0"
-	kubeconfig     string
-	remountDamaged bool
+	endpoint string
+	version  = "1.0.0"
+	conf     chubaofs.Config
 )
 
 func init() {
@@ -53,12 +50,12 @@ func main() {
 	}
 
 	cmd.Flags().AddGoFlagSet(flag.CommandLine)
-	cmd.PersistentFlags().StringVar(&nodeID, "nodeid", "", "This node's ID")
+	cmd.PersistentFlags().StringVar(&conf.NodeID, "nodeid", "", "This node's ID")
 	cmd.PersistentFlags().StringVar(&endpoint, "endpoint", "unix:///csi/csi.sock", "CSI endpoint, must be a UNIX socket")
-	cmd.PersistentFlags().StringVar(&driverName, "drivername", chubaofs.DriverName, "name of the driver (Kubernetes: `provisioner` field in StorageClass must correspond to this value)")
-	cmd.PersistentFlags().StringVar(&version, "version", version, "Driver version")
-	cmd.PersistentFlags().StringVar(&kubeconfig, "kubeconfig", "", "Kubernetes config")
-	cmd.PersistentFlags().BoolVar(&remountDamaged, "remountdamaged", false,
+	cmd.PersistentFlags().StringVar(&conf.DriverName, "drivername", chubaofs.DriverName, "name of the driver (Kubernetes: `provisioner` field in StorageClass must correspond to this value)")
+	cmd.PersistentFlags().StringVar(&conf.Version, "version", version, "Driver version")
+	cmd.PersistentFlags().StringVar(&conf.KubeConfig, "kubeconfig", "", "Kubernetes config")
+	cmd.PersistentFlags().BoolVar(&conf.RemountDamaged, "remountdamaged", false,
 		"Try to remount all the volumes damaged during csi-node restart or upgrade, set mountPropagation of pod to HostToContainer to use this feature")
 
 	if err := cmd.Execute(); err != nil {
@@ -70,7 +67,7 @@ func main() {
 }
 
 func handle() {
-	d, err := chubaofs.NewDriver(driverName, version, nodeID, kubeconfig, remountDamaged)
+	d, err := chubaofs.NewDriver(conf)
 	if err != nil {
 		glog.Errorf("chubaofs.NewDriver error:%v\n", err)
 		os.Exit(1)
