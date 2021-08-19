@@ -19,6 +19,7 @@ package chubaofs
 import (
 	"fmt"
 	"os"
+	"path"
 	"sync"
 	"time"
 
@@ -254,20 +255,12 @@ func (ns *nodeServer) getAttachedPVOnNode(nodeName string) ([]*v1.PersistentVolu
 
 	nodePVNames := make(map[string]struct{})
 	for _, va := range vaList.Items {
-		if va.Spec.NodeName != nodeName {
-			continue
+		if va.Spec.NodeName == nodeName &&
+			va.Spec.Attacher == DriverName &&
+			va.Status.Attached &&
+			va.Spec.Source.PersistentVolumeName != nil {
+			nodePVNames[*va.Spec.Source.PersistentVolumeName] = struct{}{}
 		}
-		if va.Spec.Attacher != DriverName {
-			continue
-		}
-		if !va.Status.Attached {
-			continue
-		}
-		if va.Spec.Source.PersistentVolumeName == nil {
-			continue
-		}
-
-		nodePVNames[*va.Spec.Source.PersistentVolumeName] = struct{}{}
 	}
 
 	pvList, err := ns.Driver.ClientSet.CoreV1().PersistentVolumes().List(metav1.ListOptions{})
@@ -376,7 +369,7 @@ func (ns *nodeServer) remountDamagedVolumes(nodeName string) {
 			defer wg.Done()
 
 			// remount globalmount
-			mountPath := fmt.Sprintf("/var/lib/kubelet/plugins/kubernetes.io/csi/pv/%s/globalmount", p.Name)
+			mountPath := path.Join(ns.KubeletRootDir, fmt.Sprintf("/plugins/kubernetes.io/csi/pv/%s/globalmount", p.Name))
 			if err := ns.mount(mountPath, p.Name, p.Spec.CSI.VolumeAttributes); err != nil {
 				glog.Warningf("remount damaged volume %q to path %q failed: %v\n", p.Name, mountPath, err)
 				return
@@ -385,7 +378,7 @@ func (ns *nodeServer) remountDamagedVolumes(nodeName string) {
 
 			// bind globalmount to pods
 			for _, pod := range p.pods {
-				bindTargetPath := fmt.Sprintf("/var/lib/kubelet/pods/%s/volumes/kubernetes.io~csi/%s/mount", pod.UID, p.Name)
+				bindTargetPath := path.Join(ns.KubeletRootDir, fmt.Sprintf("/pods/%s/volumes/kubernetes.io~csi/%s/mount", pod.UID, p.Name))
 				if err := bindMount(mountPath, bindTargetPath); err != nil {
 					glog.Warningf("rebind damaged volume %q to path %q failed: %v\n", p.Name, bindTargetPath, err)
 					continue

@@ -57,6 +57,7 @@ func main() {
 	cmd.PersistentFlags().StringVar(&conf.KubeConfig, "kubeconfig", "", "Kubernetes config")
 	cmd.PersistentFlags().BoolVar(&conf.RemountDamaged, "remountdamaged", false,
 		"Try to remount all the volumes damaged during csi-node restart or upgrade, set mountPropagation of pod to HostToContainer to use this feature")
+	cmd.PersistentFlags().StringVar(&conf.KubeletRootDir, "kubeletrootdir", "/var/lib/kubelet", "The path of your kubelet root dir, set it if you customized it")
 
 	if err := cmd.Execute(); err != nil {
 		glog.Errorf("cmd.Execute error:%v\n", err)
