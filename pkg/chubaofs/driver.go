@@ -15,6 +15,8 @@ package chubaofs
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/chubaofs/chubaofs-csi/pkg/csi-common"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/glog"
@@ -28,14 +30,17 @@ import (
 	"k8s.io/utils/mount"
 )
 
+const DriverName = "csi.chubaofs.com"
+
 type driver struct {
 	*csicommon.CSIDriver
-	ids *csicommon.DefaultIdentityServer
-	cs  *controllerServer
-	ns  *nodeServer
+	ids            *csicommon.DefaultIdentityServer
+	cs             *controllerServer
+	ns             *nodeServer
+	remountDamaged bool
 }
 
-func NewDriver(driverName, version, nodeID, kubeconfig string) (*driver, error) {
+func NewDriver(driverName, version, nodeID, kubeconfig string, remountDamaged bool) (*driver, error) {
 	glog.Infof("driverName:%v, version:%v, nodeID:%v", driverName, version, nodeID)
 	clientSet, err := initClientSet(kubeconfig)
 	if err != nil {
@@ -62,7 +67,8 @@ func NewDriver(driverName, version, nodeID, kubeconfig string) (*driver, error) 
 		})
 
 	return &driver{
-		CSIDriver: csiDriver,
+		CSIDriver:      csiDriver,
+		remountDamaged: remountDamaged,
 	}, nil
 }
 
@@ -105,6 +111,11 @@ func NewControllerServer(d *driver) *controllerServer {
 }
 
 func (d *driver) Run(endpoint string) {
+	nodeServer := NewNodeServer(d)
+	if nodeName := os.Getenv("KUBE_NODE_NAME"); d.remountDamaged && nodeName != "" {
+		nodeServer.remountDamagedVolumes(nodeName)
+	}
+
 	csicommon.RunControllerandNodePublishServer(endpoint, NewIdentityServer(d), NewControllerServer(d), NewNodeServer(d))
 }
 
