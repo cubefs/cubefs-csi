@@ -17,7 +17,9 @@ limitations under the License.
 package chubaofs
 
 import (
+	"fmt"
 	"os"
+	"path"
 	"sync"
 	"time"
 
@@ -28,10 +30,13 @@ import (
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/mount"
 )
 
 type nodeServer struct {
+	Config
 	*csicommon.DefaultNodeServer
 	mounter mount.Interface
 	mutex   sync.RWMutex
@@ -40,6 +45,7 @@ type nodeServer struct {
 func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
 	ns.mutex.Lock()
 	defer ns.mutex.Unlock()
+
 	start := time.Now()
 	stagingTargetPath := req.GetStagingTargetPath()
 	targetPath := req.GetTargetPath()
@@ -80,46 +86,51 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 func (ns *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
 	ns.mutex.Lock()
 	defer ns.mutex.Unlock()
+
 	start := time.Now()
 	stagingTargetPath := req.GetStagingTargetPath()
 
-	pathExists, pathErr := mount.PathExists(stagingTargetPath)
-	corruptedMnt := mount.IsCorruptedMnt(pathErr)
-	if pathExists && !corruptedMnt {
-		duration := time.Since(start)
-		glog.Infof("NodeStageVolume already mount, stagingTargetPath:%v cost:%v", stagingTargetPath, duration)
-		return &csi.NodeStageVolumeResponse{}, nil
-	}
-
-	err := mount.CleanupMountPoint(stagingTargetPath, ns.mounter, false)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "CleanupMountPoint fail, stagingTargetPath:%v error: %v", stagingTargetPath, err)
-	}
-
-	err = createMountPoint(stagingTargetPath)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "createMountPoint fail, stagingTargetPath:%v error: %v", stagingTargetPath, err)
-	}
-
-	volumeName := req.GetVolumeId()
-	param := req.VolumeContext
-	cfsServer, err := newCfsServer(volumeName, param)
-	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "new cfs server error, %v", err)
-	}
-
-	err = cfsServer.persistClientConf(stagingTargetPath)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "persist client config file fail, error: %v", err)
-	}
-
-	if err = cfsServer.runClient(); err != nil {
-		return nil, status.Errorf(codes.Internal, "mount fail, error: %v", err)
+	if err := ns.mount(stagingTargetPath, req.GetVolumeId(), req.GetVolumeContext()); err != nil {
+		return nil, err
 	}
 
 	duration := time.Since(start)
-	glog.Infof("NodeStageVolume mount, stagingTargetPath:%v cost:%v", stagingTargetPath, duration)
+	glog.Infof("NodeStageVolume mounted, stagingTargetPath:%v cost:%v", stagingTargetPath, duration)
+
 	return &csi.NodeStageVolumeResponse{}, nil
+}
+
+func (ns *nodeServer) mount(targetPath, volumeName string, param map[string]string) error {
+
+	pathExists, pathErr := mount.PathExists(targetPath)
+	corruptedMnt := mount.IsCorruptedMnt(pathErr)
+	if pathExists && !corruptedMnt {
+		glog.Infof("volume already mounted correctly, stagingTargetPath: %v", targetPath)
+		return nil
+	}
+
+	if err := mount.CleanupMountPoint(targetPath, ns.mounter, false); err != nil {
+		return status.Errorf(codes.Internal, "CleanupMountPoint fail, stagingTargetPath: %v error: %v", targetPath, err)
+	}
+
+	if err := createMountPoint(targetPath); err != nil {
+		return status.Errorf(codes.Internal, "createMountPoint fail, stagingTargetPath: %v error: %v", targetPath, err)
+	}
+
+	cfsServer, err := newCfsServer(volumeName, param)
+	if err != nil {
+		return status.Errorf(codes.InvalidArgument, "new cfs server failed: %v", err)
+	}
+
+	if err := cfsServer.persistClientConf(targetPath); err != nil {
+		return status.Errorf(codes.Internal, "persist client config file failed: %v", err)
+	}
+
+	if err := cfsServer.runClient(); err != nil {
+		return status.Errorf(codes.Internal, "mount failed: %v", err)
+	}
+
+	return nil
 }
 
 func (ns *nodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
@@ -233,4 +244,151 @@ func nodeGetVolumeStats(_ context.Context, volumePath string) (*csi.NodeGetVolum
 			},
 		},
 	}, nil
+}
+
+// getAttachedPVOnNode finds all persistent volume objects attached in the node and controlled by me.
+func (ns *nodeServer) getAttachedPVOnNode(nodeName string) ([]*v1.PersistentVolume, error) {
+	vaList, err := ns.Driver.ClientSet.StorageV1().VolumeAttachments().List(metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("unable to list VolumeAttachments: %v", err)
+	}
+
+	nodePVNames := make(map[string]struct{})
+	for _, va := range vaList.Items {
+		if va.Spec.NodeName == nodeName &&
+			va.Spec.Attacher == DriverName &&
+			va.Status.Attached &&
+			va.Spec.Source.PersistentVolumeName != nil {
+			nodePVNames[*va.Spec.Source.PersistentVolumeName] = struct{}{}
+		}
+	}
+
+	pvList, err := ns.Driver.ClientSet.CoreV1().PersistentVolumes().List(metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("unable to list PersistentVolumes: %v", err)
+	}
+
+	nodePVs := make([]*v1.PersistentVolume, 0, len(nodePVNames))
+	for i := range pvList.Items {
+		_, exist := nodePVNames[pvList.Items[i].Name]
+		if exist {
+			nodePVs = append(nodePVs, &pvList.Items[i])
+		}
+	}
+
+	return nodePVs, nil
+}
+
+type persistentVolumeWithPods struct {
+	*v1.PersistentVolume
+	pods []*v1.Pod
+}
+
+func (p *persistentVolumeWithPods) appendPodUnique(new *v1.Pod) {
+	for _, old := range p.pods {
+		if old.UID == new.UID {
+			return
+		}
+	}
+
+	p.pods = append(p.pods, new)
+}
+
+// getAttachedPVWithPodsOnNode finds all persistent volume objects as well as the related pods in the node.
+func (ns *nodeServer) getAttachedPVWithPodsOnNode(nodeName string) ([]*persistentVolumeWithPods, error) {
+	pvs, err := ns.getAttachedPVOnNode(nodeName)
+	if err != nil {
+		return nil, fmt.Errorf("getAttachedPVOnNode faied: %v", err)
+	}
+
+	claimedPVWithPods := make(map[string]*persistentVolumeWithPods, len(pvs))
+	for _, pv := range pvs {
+		if pv.Spec.ClaimRef == nil {
+			continue
+		}
+
+		pvcKey := fmt.Sprintf("%s/%s", pv.Spec.ClaimRef.Namespace, pv.Spec.ClaimRef.Name)
+		claimedPVWithPods[pvcKey] = &persistentVolumeWithPods{
+			PersistentVolume: pv,
+		}
+	}
+
+	allPodsOnNode, err := ns.Driver.ClientSet.CoreV1().Pods("").List(metav1.ListOptions{
+		FieldSelector: "spec.nodeName=" + nodeName,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list pods failed: %v", err)
+	}
+
+	for i := range allPodsOnNode.Items {
+		pod := allPodsOnNode.Items[i]
+
+		for _, volume := range pod.Spec.Volumes {
+			if volume.PersistentVolumeClaim == nil {
+				continue
+			}
+			pvcKey := fmt.Sprintf("%s/%s", pod.Namespace, volume.PersistentVolumeClaim.ClaimName)
+			pvWithPods, ok := claimedPVWithPods[pvcKey]
+			if !ok {
+				continue
+			}
+
+			pvWithPods.appendPodUnique(&pod)
+		}
+	}
+
+	ret := make([]*persistentVolumeWithPods, 0, len(claimedPVWithPods))
+	for _, v := range claimedPVWithPods {
+		if len(v.pods) != 0 {
+			ret = append(ret, v)
+		}
+	}
+
+	return ret, nil
+}
+
+// remountDamagedVolumes try to remount all the volumes damaged during csi-node restart,
+// includes the GlobalMount per pv and BindMount per pod.
+func (ns *nodeServer) remountDamagedVolumes(nodeName string) {
+	startTime := time.Now()
+
+	pvWithPods, err := ns.getAttachedPVWithPodsOnNode(nodeName)
+	if err != nil {
+		glog.Warningf("get attached pv with pods info failed: %v\n", err)
+		return
+	}
+
+	if len(pvWithPods) == 0 {
+		return
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(len(pvWithPods))
+	for _, pvp := range pvWithPods {
+		go func(p *persistentVolumeWithPods) {
+			defer wg.Done()
+
+			// remount globalmount
+			mountPath := path.Join(ns.KubeletRootDir, fmt.Sprintf("/plugins/kubernetes.io/csi/pv/%s/globalmount", p.Name))
+			if err := ns.mount(mountPath, p.Name, p.Spec.CSI.VolumeAttributes); err != nil {
+				glog.Warningf("remount damaged volume %q to path %q failed: %v\n", p.Name, mountPath, err)
+				return
+			}
+			glog.Infof("remount damaged volume %q to path %q succeed.", p.Name, mountPath)
+
+			// bind globalmount to pods
+			for _, pod := range p.pods {
+				bindTargetPath := path.Join(ns.KubeletRootDir, fmt.Sprintf("/pods/%s/volumes/kubernetes.io~csi/%s/mount", pod.UID, p.Name))
+				if err := bindMount(mountPath, bindTargetPath); err != nil {
+					glog.Warningf("rebind damaged volume %q to path %q failed: %v\n", p.Name, bindTargetPath, err)
+					continue
+				}
+
+				glog.Infof("rebind damaged volume %q to path %q succeed.", p.Name, bindTargetPath)
+			}
+		}(pvp)
+	}
+	wg.Wait()
+
+	glog.Infof("remount process finished cost %d ms", time.Since(startTime).Milliseconds())
 }

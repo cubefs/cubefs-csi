@@ -15,6 +15,8 @@ package chubaofs
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/chubaofs/chubaofs-csi/pkg/csi-common"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/glog"
@@ -28,22 +30,34 @@ import (
 	"k8s.io/utils/mount"
 )
 
+const DriverName = "csi.chubaofs.com"
+
 type driver struct {
 	*csicommon.CSIDriver
 	ids *csicommon.DefaultIdentityServer
 	cs  *controllerServer
 	ns  *nodeServer
+	Config
 }
 
-func NewDriver(driverName, version, nodeID, kubeconfig string) (*driver, error) {
-	glog.Infof("driverName:%v, version:%v, nodeID:%v", driverName, version, nodeID)
-	clientSet, err := initClientSet(kubeconfig)
+type Config struct {
+	NodeID         string
+	DriverName     string
+	KubeConfig     string
+	Version        string
+	RemountDamaged bool
+	KubeletRootDir string
+}
+
+func NewDriver(conf Config) (*driver, error) {
+	glog.Infof("driverName:%v, version:%v, nodeID:%v", conf.DriverName, conf.Version, conf.NodeID)
+	clientSet, err := initClientSet(conf.KubeConfig)
 	if err != nil {
-		glog.Errorf("init client-go Clientset fail. kubeconfig:%v, err:%v", kubeconfig, err)
+		glog.Errorf("init client-go Clientset fail. kubeconfig:%v, err:%v", conf.KubeConfig, err)
 		return nil, err
 	}
 
-	csiDriver := csicommon.NewCSIDriver(driverName, version, nodeID, clientSet)
+	csiDriver := csicommon.NewCSIDriver(conf.DriverName, conf.Version, conf.NodeID, clientSet)
 	if csiDriver == nil {
 		return nil, status.Error(codes.InvalidArgument, "csiDriver init fail")
 	}
@@ -63,6 +77,7 @@ func NewDriver(driverName, version, nodeID, kubeconfig string) (*driver, error) 
 
 	return &driver{
 		CSIDriver: csiDriver,
+		Config:    conf,
 	}, nil
 }
 
@@ -88,6 +103,7 @@ func NewNodeServer(d *driver) *nodeServer {
 	return &nodeServer{
 		DefaultNodeServer: csicommon.NewDefaultNodeServer(d.CSIDriver),
 		mounter:           mount.New(""),
+		Config:            d.Config,
 	}
 }
 
@@ -105,6 +121,11 @@ func NewControllerServer(d *driver) *controllerServer {
 }
 
 func (d *driver) Run(endpoint string) {
+	nodeServer := NewNodeServer(d)
+	if nodeName := os.Getenv("KUBE_NODE_NAME"); d.RemountDamaged && nodeName != "" {
+		nodeServer.remountDamagedVolumes(nodeName)
+	}
+
 	csicommon.RunControllerandNodePublishServer(endpoint, NewIdentityServer(d), NewControllerServer(d), NewNodeServer(d))
 }
 

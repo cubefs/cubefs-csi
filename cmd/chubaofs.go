@@ -18,21 +18,20 @@ package main
 
 import (
 	"flag"
-	"github.com/golang/glog"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/golang/glog"
 
 	"github.com/chubaofs/chubaofs-csi/pkg/chubaofs"
 	"github.com/spf13/cobra"
 )
 
 var (
-	endpoint   string
-	nodeID     string
-	driverName string
-	version    = "1.0.0"
-	kubeconfig string
+	endpoint string
+	version  = "1.0.0"
+	conf     chubaofs.Config
 )
 
 func init() {
@@ -51,11 +50,14 @@ func main() {
 	}
 
 	cmd.Flags().AddGoFlagSet(flag.CommandLine)
-	cmd.PersistentFlags().StringVar(&nodeID, "nodeid", "", "This node's ID")
+	cmd.PersistentFlags().StringVar(&conf.NodeID, "nodeid", "", "This node's ID")
 	cmd.PersistentFlags().StringVar(&endpoint, "endpoint", "unix:///csi/csi.sock", "CSI endpoint, must be a UNIX socket")
-	cmd.PersistentFlags().StringVar(&driverName, "drivername", "csi.chubaofs.com", "name of the driver (Kubernetes: `provisioner` field in StorageClass must correspond to this value)")
-	cmd.PersistentFlags().StringVar(&version, "version", version, "Driver version")
-	cmd.PersistentFlags().StringVar(&kubeconfig, "kubeconfig", "", "Kubernetes config")
+	cmd.PersistentFlags().StringVar(&conf.DriverName, "drivername", chubaofs.DriverName, "name of the driver (Kubernetes: `provisioner` field in StorageClass must correspond to this value)")
+	cmd.PersistentFlags().StringVar(&conf.Version, "version", version, "Driver version")
+	cmd.PersistentFlags().StringVar(&conf.KubeConfig, "kubeconfig", "", "Kubernetes config")
+	cmd.PersistentFlags().BoolVar(&conf.RemountDamaged, "remountdamaged", false,
+		"Try to remount all the volumes damaged during csi-node restart or upgrade, set mountPropagation of pod to HostToContainer to use this feature")
+	cmd.PersistentFlags().StringVar(&conf.KubeletRootDir, "kubeletrootdir", "/var/lib/kubelet", "The path of your kubelet root dir, set it if you customized it")
 
 	if err := cmd.Execute(); err != nil {
 		glog.Errorf("cmd.Execute error:%v\n", err)
@@ -66,7 +68,7 @@ func main() {
 }
 
 func handle() {
-	d, err := chubaofs.NewDriver(driverName, version, nodeID, kubeconfig)
+	d, err := chubaofs.NewDriver(conf)
 	if err != nil {
 		glog.Errorf("chubaofs.NewDriver error:%v\n", err)
 		os.Exit(1)
