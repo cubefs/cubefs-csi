@@ -19,7 +19,8 @@ package chubaofs
 import (
 	"fmt"
 	"os"
-	"path"
+	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -369,22 +370,43 @@ func (ns *nodeServer) remountDamagedVolumes(nodeName string) {
 			defer wg.Done()
 
 			// remount globalmount
-			mountPath := path.Join(ns.KubeletRootDir, fmt.Sprintf("/plugins/kubernetes.io/csi/pv/%s/globalmount", p.Name))
-			if err := ns.mount(mountPath, p.Name, p.Spec.CSI.VolumeAttributes); err != nil {
-				glog.Warningf("remount damaged volume %q to path %q failed: %v\n", p.Name, mountPath, err)
+			globalMountPath := filepath.Join(ns.KubeletRootDir, fmt.Sprintf("/plugins/kubernetes.io/csi/pv/%s/globalmount", p.Name))
+			if err := ns.mount(globalMountPath, p.Name, p.Spec.CSI.VolumeAttributes); err != nil {
+				glog.Warningf("remount damaged volume %q to path %q failed: %v\n", p.Name, globalMountPath, err)
 				return
 			}
-			glog.Infof("remount damaged volume %q to path %q succeed.", p.Name, mountPath)
+			glog.Infof("remount damaged volume %q to global mount path %q succeed.", p.Name, globalMountPath)
 
 			// bind globalmount to pods
 			for _, pod := range p.pods {
-				bindTargetPath := path.Join(ns.KubeletRootDir, fmt.Sprintf("/pods/%s/volumes/kubernetes.io~csi/%s/mount", pod.UID, p.Name))
-				if err := bindMount(mountPath, bindTargetPath); err != nil {
-					glog.Warningf("rebind damaged volume %q to path %q failed: %v\n", p.Name, bindTargetPath, err)
+				podDir := filepath.Join(ns.KubeletRootDir, "/pods/", string(pod.UID))
+
+				podMountPath := filepath.Join(podDir, fmt.Sprintf("/volumes/kubernetes.io~csi/%s/mount", p.Name))
+				if err := bindMount(globalMountPath, podMountPath); err != nil {
+					glog.Warningf("rebind damaged volume %q to path %q failed: %v\n", p.Name, podMountPath, err)
 					continue
 				}
+				glog.Infof("rebind damaged volume %q to pod mount path %q succeed.", p.Name, podMountPath)
 
-				glog.Infof("rebind damaged volume %q to path %q succeed.", p.Name, bindTargetPath)
+				// bind pod volume to subPath mount point
+				for _, container := range pod.Spec.Containers {
+					for i, volumeMount := range container.VolumeMounts {
+						if volumeMount.SubPath == "" {
+							continue
+						}
+
+						source := filepath.Join(podMountPath, volumeMount.SubPath)
+
+						// ref: https://github.com/kubernetes/kubernetes/blob/v1.22.0/pkg/volume/util/subpath/subpath_linux.go#L158
+						subMountPath := filepath.Join(podDir, "volume-subpaths", p.Name, container.Name, strconv.Itoa(i))
+						if err := bindMount(source, subMountPath); err != nil {
+							glog.Warningf("rebind damaged volume %q to sub mount path %q failed: %v\n", p.Name, subMountPath, err)
+							continue
+						}
+
+						glog.Infof("rebind damaged volume %q to sub mount path %q succeed.", p.Name, subMountPath)
+					}
+				}
 			}
 		}(pvp)
 	}
