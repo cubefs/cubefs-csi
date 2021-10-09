@@ -105,7 +105,7 @@ func (ns *nodeServer) mount(targetPath, volumeName string, param map[string]stri
 
 	pathExists, pathErr := mount.PathExists(targetPath)
 	corruptedMnt := mount.IsCorruptedMnt(pathErr)
-	if pathExists && !corruptedMnt {
+	if pathErr != nil && pathExists && !corruptedMnt {
 		glog.Infof("volume already mounted correctly, stagingTargetPath: %v", targetPath)
 		return nil
 	}
