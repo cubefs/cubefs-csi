@@ -21,31 +21,32 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	csicommon "github.com/chubaofs/chubaofs-csi/pkg/csi-common"
-	"github.com/golang/glog"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	csicommon "github.com/chubaofs/chubaofs-csi/pkg/csi-common"
+	"github.com/golang/glog"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const (
-	KVolumeName    = "volName"
-	KMasterAddr    = "masterAddr"
-	KLogLevel      = "logLevel"
-	KLogDir        = "logDir"
-	KOwner         = "owner"
-	KMountPoint    = "mountPoint"
-	KExporterPort  = "exporterPort"
-	KProfPort      = "profPort"
-	KCrossZone     = "crossZone"
-	KEnableToken   = "enableToken"
-	KZoneName      = "zoneName"
-	KConsulAddr    = "consulAddr"
+	KVolumeName   = "volName"
+	KMasterAddr   = "masterAddr"
+	KLogLevel     = "logLevel"
+	KLogDir       = "logDir"
+	KOwner        = "owner"
+	KMountPoint   = "mountPoint"
+	KExporterPort = "exporterPort"
+	KProfPort     = "profPort"
+	KCrossZone    = "crossZone"
+	KEnableToken  = "enableToken"
+	KZoneName     = "zoneName"
+	KConsulAddr   = "consulAddr"
 )
 
 const (
@@ -125,32 +126,44 @@ func (cs *cfsServer) createVolume(capacityGB int64) (err error) {
 	crossZone := cs.clientConf[KCrossZone]
 	token := cs.clientConf[KEnableToken]
 	zone := cs.clientConf[KZoneName]
-	for _, addr := range cs.masterAddrs {
+
+	return cs.forEachMasterAddr("CreateVolume", func(addr string) error {
 		url := fmt.Sprintf("http://%s/admin/createVol?name=%s&capacity=%v&owner=%v&crossZone=%v&enableToken=%v&zoneName=%v",
 			addr, valName, capacityGB, owner, crossZone, token, zone)
 		glog.Infof("createVol url: %v", url)
 		resp, err := cs.executeRequest(url)
 		if err != nil {
-			continue
+			return err
 		}
 
 		if resp.Code != 0 {
 			if resp.Code == 1 {
-				glog.Warningf("duplicate to create volume. url(%v) code=1 msg:%v", url, resp.Msg)
-				err = nil
-				break
-			} else {
-				glog.Errorf("create volume is failed. url(%v) code=(%v), msg:%v", url, resp.Code, resp.Msg)
-				err = fmt.Errorf("create volume is failed")
-				continue
+				glog.Warningf("duplicate to create volume. url(%v) code=1 msg: %v", url, resp.Msg)
+				return nil
 			}
-		} else {
-			err = nil
+
+			return fmt.Errorf("create volume failed: url(%v) code=(%v), msg: %v", url, resp.Code, resp.Msg)
+		}
+
+		return nil
+	})
+}
+
+func (cs *cfsServer) forEachMasterAddr(stage string, f func(addr string) error) (err error) {
+	for _, addr := range cs.masterAddrs {
+		if err = f(addr); err == nil {
 			break
 		}
+
+		glog.Warningf("try %s with master %q failed: %v", stage, addr, err)
 	}
 
-	return
+	if err != nil {
+		glog.Errorf("%s failed with all masters: %v", stage, err)
+		return err
+	}
+
+	return nil
 }
 
 func (cs *cfsServer) deleteVolume() (err error) {
@@ -160,33 +173,25 @@ func (cs *cfsServer) deleteVolume() (err error) {
 	}
 
 	valName := cs.clientConf[KVolumeName]
-	for _, addr := range cs.masterAddrs {
+	return cs.forEachMasterAddr("DeleteVolume", func(addr string) error {
 		url := fmt.Sprintf("http://%s/vol/delete?name=%s&authKey=%v", addr, valName, ownerMd5)
 		glog.Infof("deleteVol url: %v", url)
 		resp, err := cs.executeRequest(url)
 		if err != nil {
-			glog.Fatalf("delete volume fail. url:%v error:%v", url, err)
-			continue
+			return err
 		}
 
 		if resp.Code != 0 {
 			if resp.Code == 7 {
 				glog.Warningf("volume[%s] not exists, assuming the volume has already been deleted. code:%v, msg:%v",
 					valName, resp.Code, resp.Msg)
-				err = nil
-				break
-			} else {
-				glog.Errorf("delete volume[%s] is failed. code:%v, msg:%v", valName, resp.Code, resp.Msg)
-				err = fmt.Errorf("delete volume is failed")
-				continue
+				return nil
 			}
-		} else {
-			err = nil
-			break
+			return fmt.Errorf("delete volume[%s] is failed. code:%v, msg:%v", valName, resp.Code, resp.Msg)
 		}
-	}
 
-	return
+		return nil
+	})
 }
 
 func (cs *cfsServer) executeRequest(url string) (*cfsServerResponse, error) {
@@ -212,32 +217,28 @@ func (cs *cfsServer) runClient() error {
 	return mountVolume(cs.clientConfFile)
 }
 
-func (cs *cfsServer) expendVolume(capacityGB int64) (err error) {
+func (cs *cfsServer) expandVolume(capacityGB int64) (err error) {
 	ownerMd5, err := cs.getOwnerMd5()
 	if err != nil {
 		return err
 	}
 
 	volName := cs.clientConf[KVolumeName]
-	for _, addr := range cs.masterAddrs {
+
+	return cs.forEachMasterAddr("ExpandVolume", func(addr string) error {
 		url := fmt.Sprintf("http://%s/vol/expand?name=%s&authKey=%v&capacity=%v", addr, volName, ownerMd5, capacityGB)
-		glog.Infof("expendVolume url: %v", url)
+		glog.Infof("expandVolume url: %v", url)
 		resp, err := cs.executeRequest(url)
 		if err != nil {
-			glog.Fatalf("delete volume[%v] fail. url:%v error:%v", volName, url, err)
-			continue
+			return err
 		}
 
 		if resp.Code != 0 {
-			glog.Errorf("expend volume[%v] fail. code:%v, msg:%v", volName, resp.Code, resp.Msg)
-			err = fmt.Errorf("expend volume[%v] fail", volName)
-			continue
-		} else {
-			break
+			return fmt.Errorf("expand volume[%v] failed, code:%v, msg:%v", volName, resp.Code, resp.Msg)
 		}
-	}
 
-	return
+		return nil
+	})
 }
 
 func (cs *cfsServer) getOwnerMd5() (string, error) {

@@ -17,6 +17,8 @@ limitations under the License.
 package chubaofs
 
 import (
+	"time"
+
 	csicommon "github.com/chubaofs/chubaofs-csi/pkg/csi-common"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/golang/glog"
@@ -24,7 +26,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"time"
 )
 
 type controllerServer struct {
@@ -121,9 +122,9 @@ func (cs *controllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 	}
 
 	capacityGB := req.CapacityRange.RequiredBytes >> 30
-	err = cfsServer.expendVolume(capacityGB)
+	err = cfsServer.expandVolume(capacityGB)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "expendVolume[%v] error:%v", pvName, err)
+		return nil, status.Errorf(codes.InvalidArgument, "expandVolume[%v] error:%v", pvName, err)
 	}
 
 	return &csi.ControllerExpandVolumeResponse{
