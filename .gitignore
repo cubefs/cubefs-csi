@@ -7,3 +7,4 @@ build/bin/cfs-client
 *.patch
 *.rej
 .DS_Store
+local_debug_test.go
