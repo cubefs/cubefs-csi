@@ -48,7 +48,7 @@ spec:
             - mountPath: /registration
               name: registration-dir
         - name: cfs-driver
-          image: chubaofs/cfs-csi-driver:2.4.0.110.5
+          image: ghcr.io/cubefs/cfs-csi-driver:2.4.1.110.0
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
