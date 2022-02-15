@@ -14,13 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package chubaofs
+package cubefs
 
 import (
 	"time"
 
-	csicommon "github.com/chubaofs/chubaofs-csi/pkg/csi-common"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	csicommon "github.com/cubefs/cubefs-csi/pkg/csi-common"
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"

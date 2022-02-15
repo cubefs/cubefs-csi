@@ -16,7 +16,7 @@ spec:
     spec:
       serviceAccount: cfs-csi-service-account
       nodeSelector:
-        chubaofs-csi-node: enabled
+        cubefs-csi-node: enabled
       containers:
         - name: csi-node-driver-registrar
           image: quay.io/k8scsi/csi-node-driver-registrar:v1.3.0
@@ -32,7 +32,7 @@ spec:
             - name: ADDRESS
               value: /csi/csi.sock
             - name: DRIVER_REG_SOCK_PATH
-              value: /var/lib/kubelet/plugins/csi.chubaofs.com/csi.sock
+              value: /var/lib/kubelet/plugins/csi.cubefs.com/csi.sock
             - name: KUBE_NODE_NAME
               valueFrom:
                 fieldRef:
@@ -67,7 +67,7 @@ spec:
             - name: CSI_ENDPOINT
               value: unix:///csi/csi.sock
             - name: DRIVER_NAME
-              value: csi.chubaofs.com
+              value: csi.cubefs.com
             - name: KUBE_NODE_NAME
               valueFrom:
                 fieldRef:
@@ -92,7 +92,7 @@ spec:
               name: mountpoint-dir
       volumes:
         - hostPath:
-            path: /var/lib/kubelet/plugins/csi.chubaofs.com
+            path: /var/lib/kubelet/plugins/csi.cubefs.com
             type: DirectoryOrCreate
           name: socket-dir
         - hostPath:

@@ -26,7 +26,7 @@ external-resizer and kubelet add appropriate events and conditions to persistent
 
 ## Volume Expansion
 
-ChubaoFS CSI support volume expansion. you can use it by setting the `allowVolumeExpansion` field to `true` in their `StorageClass` object(s). Only PVCs created from that `StorageClass` will be allowed to trigger volume expansion.
+CubeFS CSI support volume expansion. you can use it by setting the `allowVolumeExpansion` field to `true` in their `StorageClass` object(s). Only PVCs created from that `StorageClass` will be allowed to trigger volume expansion.
 
 ```yaml
 $ cat deploy/storageclass.yaml
@@ -35,19 +35,19 @@ apiVersion: storage.k8s.io/v1
 metadata:
   name: cfs-sc
   namespace: default
-provisioner: csi.chubaofs.com
+provisioner: csi.cubefs.com
 allowVolumeExpansion: true
 reclaimPolicy: Delete
 parameters:
   # Resource manager IP address or URL
-  masterAddr: "master-service.chubaofs.svc.cluster.local:17010"
+  masterAddr: "master-service.cubefs.svc.cluster.local:17010"
   # Owner name as authentication
   owner: "csiuser"
 ```
 
 Any PVC created from this StorageClass can be edited (as illustrated below) to request more space. Kubernetes will interpret a change to the storage field as a request for more space, and will trigger automatic volume resizing.
 
-<div width="100%" style="text-align:center;"><img alt="ChubaoFS Components" src="volume_expansion.jpg" width="700"/></div>
+<div width="100%" style="text-align:center;"><img alt="CubeFS Components" src="volume_expansion.jpg" width="700"/></div>
 
 
 File system expansion must be triggered by terminating the pod using the volume. More specifically:
@@ -65,7 +65,7 @@ metadata:
   annotations:
     pv.kubernetes.io/bind-completed: "yes"
     pv.kubernetes.io/bound-by-controller: "yes"
-    volume.beta.kubernetes.io/storage-provisioner: csi.chubaofs.com
+    volume.beta.kubernetes.io/storage-provisioner: csi.cubefs.com
   creationTimestamp: "2021-01-31T08:41:27Z"
   finalizers:
   - kubernetes.io/pvc-protection

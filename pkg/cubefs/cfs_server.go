@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package chubaofs
+package cubefs
 
 import (
 	"crypto/md5"
@@ -28,7 +28,7 @@ import (
 	"strings"
 	"time"
 
-	csicommon "github.com/chubaofs/chubaofs-csi/pkg/csi-common"
+	csicommon "github.com/cubefs/cubefs-csi/pkg/csi-common"
 	"github.com/golang/glog"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -56,7 +56,7 @@ const (
 	defaultProfPort       int = 10094
 	defaultLogLevel           = "info"
 	jsonFileSuffix            = ".json"
-	defaultConsulAddr         = "http://consul-service.chubaofs.svc.cluster.local:8500"
+	defaultConsulAddr         = "http://consul-service.cubefs.svc.cluster.local:8500"
 )
 
 type cfsServer struct {

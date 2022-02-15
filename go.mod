@@ -1,4 +1,4 @@
-module github.com/chubaofs/chubaofs-csi
+module github.com/cubefs/cubefs-csi
 
 go 1.13
 
