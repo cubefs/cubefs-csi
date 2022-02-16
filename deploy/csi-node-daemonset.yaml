@@ -2,7 +2,7 @@ kind: DaemonSet
 apiVersion: apps/v1
 metadata:
   name: cfs-csi-node
-  namespace: default
+  namespace: cubefs
 spec:
   updateStrategy:
     type: OnDelete
