@@ -14,10 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package chubaofs
+package cubefs
 
 import (
-	csicommon "github.com/chubaofs/chubaofs-csi/pkg/csi-common"
+	csicommon "github.com/cubefs/cubefs-csi/pkg/csi-common"
 )
 
 type identityServer struct {

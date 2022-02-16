@@ -11,14 +11,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package chubaofs
+package cubefs
 
 import (
 	"fmt"
 	"os"
 
-	"github.com/chubaofs/chubaofs-csi/pkg/csi-common"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/cubefs/cubefs-csi/pkg/csi-common"
 	"github.com/golang/glog"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -30,7 +30,7 @@ import (
 	"k8s.io/utils/mount"
 )
 
-const DriverName = "csi.chubaofs.com"
+const DriverName = "csi.cubefs.com"
 
 type driver struct {
 	*csicommon.CSIDriver

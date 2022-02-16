@@ -14,16 +14,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package chubaofs
+package cubefs
 
 import (
 	"fmt"
-	"k8s.io/utils/mount"
 	"net"
 	"os"
 	"os/exec"
 	"path"
 	"strings"
+
+	"k8s.io/utils/mount"
 )
 
 const (

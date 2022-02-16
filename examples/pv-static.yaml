@@ -13,10 +13,10 @@ spec:
     name: cfs-pvc-static
     namespace: default
   csi:
-    driver: csi.chubaofs.com
+    driver: csi.cubefs.com
     fsType: ext4
     volumeAttributes:
-      masterAddr: master-service.chubaofs.svc.cluster.local:17010
+      masterAddr: master-service.cubefs.svc.cluster.local:17010
       owner: csiuser2
       volName: pvc-static-vol
       logDir: /cfs/logs/pvc-85e425bb-4d68-42df-bb5b-b7dc5057c022

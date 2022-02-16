@@ -2,7 +2,7 @@ kind: Deployment
 apiVersion: apps/v1
 metadata:
   name: cfs-csi-controller
-  namespace: default
+  namespace: cubefs
 spec:
   selector:
     matchLabels:
@@ -15,7 +15,7 @@ spec:
     spec:
       serviceAccount: cfs-csi-service-account
       nodeSelector:
-        chubaofs-csi-controller: enabled
+        cubefs-csi-controller: enabled
       containers:
         - name: csi-provisioner
           image: quay.io/k8scsi/csi-provisioner:v1.6.0
@@ -23,7 +23,7 @@ spec:
           securityContext:
             privileged: true
           args:
-            - --provisioner=csi.chubaofs.com
+            - --provisioner=csi.cubefs.com
             - --csi-address=$(ADDRESS)
           env:
             - name: TZ
@@ -79,7 +79,7 @@ spec:
             - mountPath: /csi
               name: socket-dir
         - name: cfs-driver
-          image: ghcr.io/cubefs/cfs-csi-driver:2.4.1.110.0
+          image: ghcr.io/cubefs/cfs-csi-driver:2.4.1.110.1
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
@@ -98,7 +98,7 @@ spec:
             - name: CSI_ENDPOINT
               value: unix:///csi/csi-controller.sock
             - name: DRIVER_NAME
-              value: csi.chubaofs.com
+              value: csi.cubefs.com
             - name: KUBE_NODE_NAME
               valueFrom:
                 fieldRef:
@@ -123,7 +123,7 @@ spec:
               name: mountpoint-dir
       volumes:
         - hostPath:
-            path: /var/lib/kubelet/plugins/csi.chubaofs.com
+            path: /var/lib/kubelet/plugins/csi.cubefs.com
             type: DirectoryOrCreate
           name: socket-dir
         - hostPath:

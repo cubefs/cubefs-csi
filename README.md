@@ -1,29 +1,29 @@
-[![Build Status](https://travis-ci.org/chubaofs/chubaofs-csi.svg?branch=master)](https://travis-ci.org/chubaofs/chubaofs-csi)
+[![Build Status](https://travis-ci.org/cubefs/cubefs-csi.svg?branch=master)](https://travis-ci.org/cubefs/cubefs-csi)
 
-# ChubaoFS CSI Driver
+# CubeFS CSI Driver
 
 ## Overview
 
-ChubaoFS Container Storage Interface (CSI) plugins.
+CubeFS Container Storage Interface (CSI) plugins.
 
 ## Prerequisite
 
 * Kubernetes 1.16.0
 * CSI spec version 1.1.0
 
-## Prepare on-premise ChubaoFS cluster
+## Prepare on-premise CubeFS cluster
 
-An on-premise ChubaoFS cluster can be deployed separately, or within the same Kubernetes cluster as applications which require persistent volumes. Please refer to [chubaofs-helm](https://github.com/chubaofs/chubaofs-helm) for more details on deployment using Helm.
+An on-premise CubeFS cluster can be deployed separately, or within the same Kubernetes cluster as applications which require persistent volumes. Please refer to [cubefs-helm](https://github.com/cubefs/cubefs-helm) for more details on deployment using Helm.
 
 ## Add labels to Kubernetes node
 
-You should tag each Kubernetes node with the appropriate labels accorindly for CSI node of ChubaoFS.
+You should tag each Kubernetes node with the appropriate labels accorindly for CSI node of CubeFS.
 `deploy/csi-controller-deployment.yaml` and `deploy/csi-node-daemonset.yaml` have `nodeSelector` element, 
-so you should add a label for nodes. If you want using ChubaoFS CSI in whole kubernetes cluster, you can delete `nodeSelector` element.
+so you should add a label for nodes. If you want using CubeFS CSI in whole kubernetes cluster, you can delete `nodeSelector` element.
 
 ```
-kubectl label node <nodename> chubaofs-csi-controller=enabled
-kubectl label node <nodename> chubaofs-csi-node=enabled
+kubectl label node <nodename> cubefs-csi-controller=enabled
+kubectl label node <nodename> cubefs-csi-node=enabled
 ```
 
 ## Deploy the CSI driver
@@ -39,9 +39,9 @@ $ kubectl apply -f deploy/csi-node-daemonset.yaml
 >
 > `sed -i 's#/var/lib/kubelet#/data1/k8s/lib/kubelet#g'  deploy/csi-node-daemonset.yaml`
 
-## Use Remote ChubaoFS Cluster as backend storage
+## Use Remote CubeFS Cluster as backend storage
 
-There is only 3 steps before finally using remote ChubaoFS cluster as file system
+There is only 3 steps before finally using remote CubeFS cluster as file system
 
 1. Create StorageClass
 2. Create PVC (Persistent Volume Claim)
@@ -56,11 +56,11 @@ kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
   name: cfs-sc
-provisioner: csi.chubaofs.com
+provisioner: csi.cubefs.com
 reclaimPolicy: Delete
 parameters:
-  masterAddr: "master-service.chubaofs.svc.cluster.local:17010"
-  consulAddr: "http://consul-service.chubaofs.svc.cluster.local:8500"
+  masterAddr: "master-service.cubefs.svc.cluster.local:17010"
+  consulAddr: "http://consul-service.cubefs.svc.cluster.local:8500"
   owner: "csiuser"
   logLevel: "debug"
 ```
@@ -117,7 +117,7 @@ spec:
         app: cfs-csi-demo-pod
     spec:
       containers:
-        - name: chubaofs-csi-demo
+        - name: cubefs-csi-demo
           image: nginx:1.17.9
           imagePullPolicy: "IfNotPresent"
           ports:
