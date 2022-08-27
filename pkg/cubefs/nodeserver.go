@@ -249,7 +249,7 @@ func nodeGetVolumeStats(_ context.Context, volumePath string) (*csi.NodeGetVolum
 
 // getAttachedPVOnNode finds all persistent volume objects attached in the node and controlled by me.
 func (ns *nodeServer) getAttachedPVOnNode(nodeName string) ([]*v1.PersistentVolume, error) {
-	vaList, err := ns.Driver.ClientSet.StorageV1().VolumeAttachments().List(metav1.ListOptions{})
+	vaList, err := ns.Driver.ClientSet.StorageV1().VolumeAttachments().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("unable to list VolumeAttachments: %v", err)
 	}
@@ -264,7 +264,7 @@ func (ns *nodeServer) getAttachedPVOnNode(nodeName string) ([]*v1.PersistentVolu
 		}
 	}
 
-	pvList, err := ns.Driver.ClientSet.CoreV1().PersistentVolumes().List(metav1.ListOptions{})
+	pvList, err := ns.Driver.ClientSet.CoreV1().PersistentVolumes().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("unable to list PersistentVolumes: %v", err)
 	}
@@ -314,7 +314,7 @@ func (ns *nodeServer) getAttachedPVWithPodsOnNode(nodeName string) ([]*persisten
 		}
 	}
 
-	allPodsOnNode, err := ns.Driver.ClientSet.CoreV1().Pods("").List(metav1.ListOptions{
+	allPodsOnNode, err := ns.Driver.ClientSet.CoreV1().Pods("").List(context.Background(), metav1.ListOptions{
 		FieldSelector: "spec.nodeName=" + nodeName,
 	})
 	if err != nil {

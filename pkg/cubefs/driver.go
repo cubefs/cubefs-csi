@@ -14,6 +14,7 @@ limitations under the License.
 package cubefs
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -129,8 +130,8 @@ func (d *driver) Run(endpoint string) {
 	csicommon.RunControllerandNodePublishServer(endpoint, NewIdentityServer(d), NewControllerServer(d), NewNodeServer(d))
 }
 
-func (d *driver) queryPersistentVolumes(pvName string) (*v1.PersistentVolume, error) {
-	persistentVolume, err := d.CSIDriver.ClientSet.CoreV1().PersistentVolumes().Get(pvName, metav1.GetOptions{})
+func (d *driver) queryPersistentVolumes(ctx context.Context, pvName string) (*v1.PersistentVolume, error) {
+	persistentVolume, err := d.CSIDriver.ClientSet.CoreV1().PersistentVolumes().Get(ctx, pvName, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
