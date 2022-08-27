@@ -3,7 +3,7 @@ module github.com/cubefs/cubefs-csi
 go 1.18
 
 require (
-	github.com/container-storage-interface/spec v1.1.0
+	github.com/container-storage-interface/spec v1.5.0
 	github.com/golang/glog v1.0.0
 	github.com/kubernetes-csi/csi-lib-utils v0.7.0
 	github.com/spf13/cobra v1.5.0
