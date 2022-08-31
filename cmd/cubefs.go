@@ -18,6 +18,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -34,12 +35,20 @@ var (
 	conf     cubefs.Config
 )
 
+// injected while compile
+var (
+	CommitID  = ""
+	BuildTime = ""
+	Branch    = ""
+)
+
 func init() {
 	_ = flag.Set("logtostderr", "true")
 }
 
 func main() {
-	_ = flag.CommandLine.Parse([]string{})
+	fmt.Printf("System build info: BuildTime: [%s], Branch [%s], CommitID [%s]\n", BuildTime, Branch, CommitID)
+
 	cmd := &cobra.Command{
 		Use:   "cfs-csi-driver --endpoint=<endpoint> --nodeid=<nodeid> --drivername=<drivername> --version=<version>",
 		Short: "CSI based CFS driver",

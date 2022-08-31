@@ -24,7 +24,6 @@ spec:
           securityContext:
             privileged: true
           args:
-            - --provisioner=csi.cubefs.com
             - --csi-address=$(ADDRESS)
           env:
             - name: TZ
