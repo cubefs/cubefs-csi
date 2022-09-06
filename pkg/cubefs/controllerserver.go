@@ -73,7 +73,7 @@ func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	}
 
 	volumeName := req.VolumeId
-	persistentVolume, err := cs.driver.queryPersistentVolumes(volumeName)
+	persistentVolume, err := cs.driver.queryPersistentVolumes(ctx, volumeName)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "not found PersistentVolume[%v], error:%v", volumeName, err)
 	}
@@ -110,7 +110,7 @@ func (cs *controllerServer) ValidateVolumeCapabilities(ctx context.Context, req 
 
 func (cs *controllerServer) ControllerExpandVolume(ctx context.Context, req *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
 	pvName := req.VolumeId
-	pv, err := cs.driver.ClientSet.CoreV1().PersistentVolumes().Get(pvName, metav1.GetOptions{})
+	pv, err := cs.driver.ClientSet.CoreV1().PersistentVolumes().Get(ctx, pvName, metav1.GetOptions{})
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "Not found PersistentVolumes[%v], error:%v", pvName, err)
 	}

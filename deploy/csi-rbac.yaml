@@ -52,8 +52,14 @@ rules:
     resources: [ "storageclasses" ]
     verbs: [ "get", "list", "watch" ]
   - apiGroups: [ "storage.k8s.io" ]
+    resources: [ "csinodes" ]
+    verbs: [ "get", "list", "watch" ]
+  - apiGroups: [ "storage.k8s.io" ]
     resources: [ "volumeattachments" ]
     verbs: [ "get", "list", "watch", "create", "update", "delete", "patch" ]
+  - apiGroups: [ "storage.k8s.io" ]
+    resources: [ "volumeattachments/status" ]
+    verbs: [ "patch" ]
 ---
 kind: Role
 apiVersion: rbac.authorization.k8s.io/v1

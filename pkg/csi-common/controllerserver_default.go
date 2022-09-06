@@ -78,3 +78,8 @@ func (cs *DefaultControllerServer) ListSnapshots(ctx context.Context, req *csi.L
 func (cs *DefaultControllerServer) ControllerExpandVolume(context.Context, *csi.ControllerExpandVolumeRequest) (*csi.ControllerExpandVolumeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "Unimplemented")
 }
+
+// ControllerGetVolume is still an alpha feature, we do not support it now
+func (cs *DefaultControllerServer) ControllerGetVolume(ctx context.Context, request *csi.ControllerGetVolumeRequest) (*csi.ControllerGetVolumeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "Unimplemented")
+}
