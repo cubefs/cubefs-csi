@@ -79,7 +79,7 @@ spec:
             - mountPath: /csi
               name: socket-dir
         - name: cfs-driver
-          image: ghcr.io/cubefs/cfs-csi-driver:3.1.0.150.0
+          image: ghcr.io/cubefs/cfs-csi-driver:3.2.0.150.0
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
