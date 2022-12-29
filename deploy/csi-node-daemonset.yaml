@@ -17,7 +17,7 @@ spec:
       serviceAccount: cfs-csi-service-account
       serviceAccountName: cfs-csi-service-account
       nodeSelector:
-        cubefs-csi-node: enabled
+        "component.cubefs.io/csi": "enabled"
       containers:
         - name: csi-node-driver-registrar
           image: k8s.gcr.io/sig-storage/csi-node-driver-registrar:v2.5.0

@@ -18,6 +18,7 @@ package csicommon
 
 import (
 	"fmt"
+	"path"
 	"strings"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -75,14 +76,33 @@ func RunControllerandNodePublishServer(endpoint string, ids csi.IdentityServer, 
 	s.Wait()
 }
 
+var tooFrequentMethods = []string{"NodeGetVolumeStats", "NodeGetCapabilities"}
+
+// some methods are too frequently, which will cause a full page of junk log
+func needFullLog(method string) bool {
+	method = path.Base(method)
+	for _, m := range tooFrequentMethods {
+		if m == method {
+			return false
+		}
+	}
+
+	return true
+}
+
 func logGRPC(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	glog.V(5).Infof("GRPC request: %s body: %s", info.FullMethod, protosanitizer.StripSecrets(req))
+	needFullLog := needFullLog(info.FullMethod)
+	if needFullLog {
+		glog.V(5).Infof("GRPC request: %s body: %s", info.FullMethod, protosanitizer.StripSecrets(req))
+	}
+
 	resp, err := handler(ctx, req)
 	if err != nil {
 		glog.Errorf("GRPC error: %v", err)
-	} else {
+	} else if needFullLog {
 		glog.V(5).Infof("GRPC response: %s return: %s", info.FullMethod, protosanitizer.StripSecrets(resp))
 	}
+
 	return resp, err
 }
 

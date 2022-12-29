@@ -15,18 +15,29 @@ CubeFS Container Storage Interface (CSI) plugins.
 
 An on-premise CubeFS cluster can be deployed separately, or within the same Kubernetes cluster as applications which require persistent volumes. Please refer to [cubefs-helm](https://github.com/cubefs/cubefs-helm) for more details on deployment using Helm.
 
+
+
+# Deploy
+
+CSI supports deploy with helm as well as using raw YAML files.
+
+Though, the first step of these two methods are label the node:
+
 ## Add labels to Kubernetes node
 
 You should tag each Kubernetes node with the appropriate labels accorindly for CSI node of CubeFS.
-`deploy/csi-controller-deployment.yaml` and `deploy/csi-node-daemonset.yaml` have `nodeSelector` element, 
+`deploy/csi-controller-deployment.yaml` and `deploy/csi-node-daemonset.yaml` have `nodeSelector` element,
 so you should add a label for nodes. If you want using CubeFS CSI in whole kubernetes cluster, you can delete `nodeSelector` element.
 
 ```
-kubectl label node <nodename> cubefs-csi-controller=enabled
-kubectl label node <nodename> cubefs-csi-node=enabled
+kubectl label node <nodename> component.cubefs.io/csi=enabled
 ```
 
-## Deploy the CSI driver
+## 
+
+## Direct Raw Files Deployment
+
+### Deploy the CSI driver
 
 ```
 $ kubectl apply -f deploy/csi-rbac.yaml
@@ -39,7 +50,7 @@ $ kubectl apply -f deploy/csi-node-daemonset.yaml
 >
 > `sed -i 's#/var/lib/kubelet#/data1/k8s/lib/kubelet#g'  deploy/csi-node-daemonset.yaml`
 
-## Use Remote CubeFS Cluster as backend storage
+### Use Remote CubeFS Cluster as backend storage
 
 There is only 3 steps before finally using remote CubeFS cluster as file system
 
@@ -70,6 +81,83 @@ Creating command.
 ```
 $ kubectl create -f deploy/storageclass.yaml
 ```
+
+
+
+## Helm Deployment
+
+### Download the CubeFS-Helm project
+
+```
+git clone https://github.com/cubefs/cubefs-helm
+cd cubefs-helm
+```
+
+### Edit the values file
+
+Create a values file, and edit it as below:
+
+`vi ~/cubefs.yaml`
+
+```
+component:
+  master: false
+  datanode: false
+  metanode: false
+  objectnode: false
+  client: false
+  csi: true
+  monitor: false
+  ingress: false
+
+image:
+  # CSI related images
+  csi_driver: ghcr.io/cubefs/cfs-csi-driver:3.2.0.150.0
+  csi_provisioner: k8s.gcr.io/sig-storage/csi-provisioner:v2.2.2
+  csi_attacher: k8s.gcr.io/sig-storage/csi-attacher:v3.4.0
+  csi_resizer: k8s.gcr.io/sig-storage/csi-resizer:v1.3.0
+  driver_registrar: k8s.gcr.io/sig-storage/csi-node-driver-registrar:v2.5.0
+
+csi:
+  driverName: csi.cubefs.com
+  logLevel: error
+  # If you changed the default kubelet home path, this
+  # value needs to be modified accordingly
+  kubeletPath: /var/lib/kubelet
+  controller:
+    tolerations: [ ]
+    nodeSelector:
+      "component.cubefs.io/csi": "enabled"
+  node:
+    tolerations: [ ]
+    nodeSelector:
+      "component.cubefs.io/csi": "enabled"
+    resources:
+      enabled: false
+      requests:
+        memory: "4048Mi"
+        cpu: "2000m"
+      limits:
+        memory: "4048Mi"
+        cpu: "2000m"
+  storageClass:
+    # Whether automatically set this StorageClass to default volume provisioner
+    setToDefault: true
+    # StorageClass reclaim policy, 'Delete' or 'Retain' is supported
+    reclaimPolicy: "Delete"
+    # Override the master address parameter to connect to external cluster, if the cluster is deployed
+    # in the same k8s cluster, it can be omitted.
+    masterAddr: ""
+    otherParameters:
+```
+
+### Install
+
+`helm upgrade --install cubefs ./cubefs -f ~/cubefs.yaml -n cubefs --create-namespace`
+
+## Verify
+
+After we installed the CSI, we can create a PVC and mount it inside a Pod to verify if everything all right.
 
 ### Create PVC
 
