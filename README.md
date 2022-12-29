@@ -22,8 +22,7 @@ You should tag each Kubernetes node with the appropriate labels accorindly for C
 so you should add a label for nodes. If you want using CubeFS CSI in whole kubernetes cluster, you can delete `nodeSelector` element.
 
 ```
-kubectl label node <nodename> cubefs-csi-controller=enabled
-kubectl label node <nodename> cubefs-csi-node=enabled
+kubectl label node <nodename> component.cubefs.io/csi=enabled
 ```
 
 ## Deploy the CSI driver

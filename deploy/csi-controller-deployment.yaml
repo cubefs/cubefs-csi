@@ -16,7 +16,7 @@ spec:
       serviceAccount: cfs-csi-service-account
       serviceAccountName: cfs-csi-service-account
       nodeSelector:
-        cubefs-csi-controller: enabled
+        "component.cubefs.io/csi": "enabled"
       containers:
         - name: csi-provisioner
           image: k8s.gcr.io/sig-storage/csi-provisioner:v2.2.2
