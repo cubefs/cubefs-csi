@@ -1,0 +1,14 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: cfs-sc-ec
+provisioner: csi.cubefs.com
+allowVolumeExpansion: true
+reclaimPolicy: Delete
+parameters:
+  # Resource manager IP address or URL
+  masterAddr: "master-service.cubefs.svc.cluster.local:17010"
+  # Owner name as authentication
+  owner: "csiuser"
+  # volType, 1 for Erasure Coding
+  volType: "1"

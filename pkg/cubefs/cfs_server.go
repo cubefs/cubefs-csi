@@ -47,6 +47,7 @@ const (
 	KEnableToken  = "enableToken"
 	KZoneName     = "zoneName"
 	KConsulAddr   = "consulAddr"
+	KVolType      = "volType"
 )
 
 const (
@@ -57,6 +58,7 @@ const (
 	defaultLogLevel           = "info"
 	jsonFileSuffix            = ".json"
 	defaultConsulAddr         = "http://consul-service.cubefs.svc.cluster.local:8500"
+	defaultVolType            = "0"
 )
 
 type cfsServer struct {
@@ -87,6 +89,7 @@ func newCfsServer(volName string, param map[string]string) (cs *cfsServer, err e
 	param[KLogLevel] = getValueWithDefault(param, KLogLevel, defaultLogLevel)
 	param[KLogDir] = defaultLogDir + newVolName
 	param[KConsulAddr] = getValueWithDefault(param, KConsulAddr, defaultConsulAddr)
+	param[KVolType] = getValueWithDefault(param, KVolType,  defaultVolType)
 	return &cfsServer{
 		clientConfFile: clientConfFile,
 		masterAddrs:    strings.Split(masterAddr, ","),
@@ -126,10 +129,11 @@ func (cs *cfsServer) createVolume(capacityGB int64) (err error) {
 	crossZone := cs.clientConf[KCrossZone]
 	token := cs.clientConf[KEnableToken]
 	zone := cs.clientConf[KZoneName]
+	volType := cs.clientConf[KVolType]
 
 	return cs.forEachMasterAddr("CreateVolume", func(addr string) error {
-		url := fmt.Sprintf("http://%s/admin/createVol?name=%s&capacity=%v&owner=%v&crossZone=%v&enableToken=%v&zoneName=%v",
-			addr, valName, capacityGB, owner, crossZone, token, zone)
+		url := fmt.Sprintf("http://%s/admin/createVol?name=%s&capacity=%v&owner=%v&crossZone=%v&enableToken=%v&zoneName=%v&volType=%v",
+			addr, valName, capacityGB, owner, crossZone, token, zone, volType)
 		glog.Infof("createVol url: %v", url)
 		resp, err := cs.executeRequest(url)
 		if err != nil {
