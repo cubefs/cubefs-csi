@@ -61,6 +61,11 @@ const (
 	defaultVolType            = "0"
 )
 
+const {
+	ErrCodeVolNotExists = 7
+	ErrCodeDuplicateVol = 12
+}
+
 type cfsServer struct {
 	clientConfFile string
 	masterAddrs    []string
@@ -141,8 +146,8 @@ func (cs *cfsServer) createVolume(capacityGB int64) (err error) {
 		}
 
 		if resp.Code != 0 {
-			if resp.Code == 1 {
-				glog.Warningf("duplicate to create volume. url(%v) code=1 msg: %v", url, resp.Msg)
+			if resp.Code == ErrCodeDuplicateVol {
+				glog.Warningf("duplicate to create volume. url(%v) code=%v msg: %v", url, ErrCodeDuplicateVol, resp.Msg)
 				return nil
 			}
 
@@ -186,7 +191,7 @@ func (cs *cfsServer) deleteVolume() (err error) {
 		}
 
 		if resp.Code != 0 {
-			if resp.Code == 7 {
+			if resp.Code == ErrCodeVolNotExists {
 				glog.Warningf("volume[%s] not exists, assuming the volume has already been deleted. code:%v, msg:%v",
 					valName, resp.Code, resp.Msg)
 				return nil
