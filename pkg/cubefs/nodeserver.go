@@ -101,37 +101,49 @@ func (ns *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVol
 	return &csi.NodeStageVolumeResponse{}, nil
 }
 
-func (ns *nodeServer) mount(targetPath, volumeName string, param map[string]string) error {
-
+func (ns *nodeServer) mount(targetPath, volumeName string, param map[string]string) (retErr error) {
+	defer func(){
+		if retErr != nil {
+			glog.Errorf("volume mount failed, remove the targetPath: %v, error: %v", targetPath, retErr.Error())
+			if err := os.Remove(targetPath); err != nil {
+				glog.Errorf("targetPath remove failed: %v", err.Error())
+			}
+		}
+	}()
 	pathExists, pathErr := mount.PathExists(targetPath)
 	corruptedMnt := mount.IsCorruptedMnt(pathErr)
 	if pathExists && !corruptedMnt {
 		glog.Infof("volume already mounted correctly, stagingTargetPath: %v", targetPath)
-		return nil
+		return
 	}
 
 	if err := mount.CleanupMountPoint(targetPath, ns.mounter, false); err != nil {
-		return status.Errorf(codes.Internal, "CleanupMountPoint fail, stagingTargetPath: %v error: %v", targetPath, err)
+		retErr = status.Errorf(codes.Internal, "CleanupMountPoint fail, stagingTargetPath: %v error: %v", targetPath, err)
+		return 
 	}
 
 	if err := createMountPoint(targetPath); err != nil {
-		return status.Errorf(codes.Internal, "createMountPoint fail, stagingTargetPath: %v error: %v", targetPath, err)
+		retErr = status.Errorf(codes.Internal, "createMountPoint fail, stagingTargetPath: %v error: %v", targetPath, err)
+		return 
 	}
 
 	cfsServer, err := newCfsServer(volumeName, param)
 	if err != nil {
-		return status.Errorf(codes.InvalidArgument, "new cfs server failed: %v", err)
+		retErr = status.Errorf(codes.InvalidArgument, "new cfs server failed: %v", err)
+		return 
 	}
 
 	if err := cfsServer.persistClientConf(targetPath); err != nil {
-		return status.Errorf(codes.Internal, "persist client config file failed: %v", err)
+		retErr = status.Errorf(codes.Internal, "persist client config file failed: %v", err)
+		return 
 	}
 
 	if err := cfsServer.runClient(); err != nil {
-		return status.Errorf(codes.Internal, "mount failed: %v", err)
+		retErr = status.Errorf(codes.Internal, "mount failed: %v", err)
+		return 
 	}
 
-	return nil
+	return
 }
 
 func (ns *nodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
