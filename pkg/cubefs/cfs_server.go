@@ -61,10 +61,10 @@ const (
 	defaultVolType            = "0"
 )
 
-const {
+const (
 	ErrCodeVolNotExists = 7
 	ErrCodeDuplicateVol = 12
-}
+)
 
 type cfsServer struct {
 	clientConfFile string
@@ -94,7 +94,7 @@ func newCfsServer(volName string, param map[string]string) (cs *cfsServer, err e
 	param[KLogLevel] = getValueWithDefault(param, KLogLevel, defaultLogLevel)
 	param[KLogDir] = defaultLogDir + newVolName
 	param[KConsulAddr] = getValueWithDefault(param, KConsulAddr, defaultConsulAddr)
-	param[KVolType] = getValueWithDefault(param, KVolType,  defaultVolType)
+	param[KVolType] = getValueWithDefault(param, KVolType, defaultVolType)
 	return &cfsServer{
 		clientConfFile: clientConfFile,
 		masterAddrs:    strings.Split(masterAddr, ","),
