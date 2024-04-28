@@ -1,4 +1,4 @@
-FROM ghcr.io/cubefs/cfs-csi-base:v0.0.1
+FROM cubefs/cfs-csi-base:v0.0.1
 RUN mkdir -p /cfs/bin /cfs/conf /cfs/logs
 ADD start.sh /cfs/bin
 ADD bin/cfs-client /cfs/bin

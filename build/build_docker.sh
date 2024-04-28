@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-Version="1.0.0"
+Version="v1.0.0"
 if [[ -n "$1" ]] ;then
-	# docker image tag of CubeFS CSI Driver
+	# docker image tag of CubeFS CSI Driver, e.g. v3.3.0
     Version=$1
 fi
 
