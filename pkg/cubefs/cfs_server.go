@@ -63,7 +63,8 @@ const (
 
 const (
 	ErrCodeVolNotExists = 7
-	ErrCodeDuplicateVol = 12
+
+	ErrDuplicateVolMsg = "duplicate vol"
 )
 
 type cfsServer struct {
@@ -146,8 +147,8 @@ func (cs *cfsServer) createVolume(capacityGB int64) (err error) {
 		}
 
 		if resp.Code != 0 {
-			if resp.Code == ErrCodeDuplicateVol {
-				glog.Warningf("duplicate to create volume. url(%v) code=%v msg: %v", url, ErrCodeDuplicateVol, resp.Msg)
+			if strings.Contains(resp.Msg, ErrDuplicateVolMsg) {
+				glog.Warningf("duplicate to create volume. url(%v) msg: %v", url, resp.Msg)
 				return nil
 			}
 
