@@ -4,7 +4,12 @@
 
 ## Overview
 
-CubeFS Container Storage Interface (CSI) plugins.
+* CubeFS Container Storage Interface (CSI) plugins. 
+
+## Governance
+* CSI is a sub-project of the CubeFS main project, complying with the rules of CubeFS main projects.
+* CSI does not have independent leadership, adopting the same leadership strategy as the CubeFS main project.
+* Contributions to CSI are equivalent to contributions to the main project and can be used as a basis for community role promotion.
 
 ## Prerequisite
 
