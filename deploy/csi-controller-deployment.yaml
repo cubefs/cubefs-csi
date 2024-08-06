@@ -79,7 +79,7 @@ spec:
             - mountPath: /csi
               name: socket-dir
         - name: cfs-driver
-          image: cubefs/cfs-csi-driver:v3.2.1
+          image: cubefs/cfs-csi-driver:v3.3.0
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
