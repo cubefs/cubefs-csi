@@ -21,7 +21,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -120,7 +120,7 @@ func (cs *cfsServer) persistClientConf(mountPoint string) error {
 	cs.clientConf[KProfPort] = strconv.Itoa(profPort)
 	_ = os.Mkdir(cs.clientConf[KLogDir], 0777)
 	clientConfBytes, _ := json.Marshal(cs.clientConf)
-	err := ioutil.WriteFile(cs.clientConfFile, clientConfBytes, 0444)
+	err := os.WriteFile(cs.clientConfFile, clientConfBytes, 0444)
 	if err != nil {
 		return status.Errorf(codes.Internal, "create client config file fail. err: %v", err.Error())
 	}
@@ -211,7 +211,7 @@ func (cs *cfsServer) executeRequest(url string) (*cfsServerResponse, error) {
 	}
 
 	defer httpResp.Body.Close()
-	body, err := ioutil.ReadAll(httpResp.Body)
+	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
 		return nil, status.Errorf(codes.Unavailable, "read http response body, url(%v) bodyLen(%v) err(%v)", url, len(body), err)
 	}
