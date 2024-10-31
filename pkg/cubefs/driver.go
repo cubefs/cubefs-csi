@@ -124,7 +124,7 @@ func NewControllerServer(d *driver) *controllerServer {
 func (d *driver) Run(endpoint string) {
 	nodeServer := NewNodeServer(d)
 	if nodeName := os.Getenv("KUBE_NODE_NAME"); d.RemountDamaged && nodeName != "" {
-		nodeServer.remountDamagedVolumes(nodeName)
+		go nodeServer.remountDamagedVolumes(nodeName)
 	}
 
 	csicommon.RunControllerandNodePublishServer(endpoint, NewIdentityServer(d), NewControllerServer(d), NewNodeServer(d))
