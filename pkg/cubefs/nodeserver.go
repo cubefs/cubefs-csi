@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -51,20 +52,39 @@ func (ns *nodeServer) NodePublishVolume(ctx context.Context, req *csi.NodePublis
 	stagingTargetPath := req.GetStagingTargetPath()
 	targetPath := req.GetTargetPath()
 
-	err := mount.CleanupMountPoint(targetPath, ns.mounter, false)
+	// check mountPoint
+	isMnt, err := IsMountPoint(targetPath)
+	glog.V(5).Infof("NodePublishVolume targetPath %s isMnt %v err %v", targetPath, isMnt, err)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "CleanupMountPoint fail, targetPath:%v error: %v", targetPath, err)
+		// os.IsNotExist(err)  not exist
+		if strings.Contains(err.Error(), "transport endpoint is not connected") {
+			if err = ns.mounter.Unmount(targetPath); err != nil {
+				if strings.Contains(err.Error(), "not mounted") {
+					glog.Warningf("NodePublishVolume corrupt mount Unmount targetPath %s unmounted", targetPath)
+				} else {
+					return &csi.NodePublishVolumeResponse{}, status.Errorf(codes.Internal, "NodePublishVolume Unmount targetPath %s corrupt mount failed error: %v", targetPath, err)
+				}
+			}
+			isMnt = false
+		} else if os.IsNotExist(err) {
+			// targetPath not exists
+			if err = createMountPoint(targetPath); err != nil {
+				return &csi.NodePublishVolumeResponse{}, status.Errorf(codes.Internal, "NodePublishVolume createMountPoint targetPath %s failed %v", targetPath, err)
+			}
+		} else {
+			return &csi.NodePublishVolumeResponse{}, status.Errorf(codes.Internal, "NodePublishVolume IsMountPoint failed error: %v", err)
+		}
 	}
 
-	err = createMountPoint(targetPath)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "createMountPoint fail, targetPath:%s error: %v", targetPath, err)
+	// if mountPoint is right mount, return
+	if isMnt {
+		glog.Infof("NodePublishVolume volume already mounted correctly, targetPath: %v", targetPath)
+		return &csi.NodePublishVolumeResponse{}, nil
 	}
 
 	err = bindMount(stagingTargetPath, targetPath)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "mount bind fail. stagingTargetPath:%v, targetPath:%v error:%v",
-			stagingTargetPath, targetPath, err)
+		return &csi.NodePublishVolumeResponse{}, status.Errorf(codes.Internal, "NodePublishVolume  bindMount failed stagingTargetPath:%v, targetPath:%v error:%v", stagingTargetPath, targetPath, err)
 	}
 
 	duration := time.Since(start)
@@ -76,11 +96,38 @@ func (ns *nodeServer) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpu
 	ns.mutex.Lock()
 	defer ns.mutex.Unlock()
 	targetPath := req.GetTargetPath()
-	err := mount.CleanupMountPoint(targetPath, ns.mounter, false)
+
+	// check mountPoint
+	isMnt, err := IsMountPoint(targetPath)
+	glog.V(5).Infof("NodeUnpublishVolume targetPath %s isMnt %v err %v", targetPath, isMnt, err)
 	if err != nil {
-		return nil, err
+		if strings.Contains(err.Error(), "transport endpoint is not connected") {
+			// crush mount point, need umount
+			isMnt = true
+		} else if os.IsNotExist(err) {
+			// os.IsNotExist(err)  not exist
+			glog.V(5).Infof("NodeUnpublishVolume IsNotExist targetPath %s not exist", targetPath)
+			return &csi.NodeUnpublishVolumeResponse{}, nil
+		} else {
+			return &csi.NodeUnpublishVolumeResponse{}, status.Errorf(codes.Internal, "NodeUnpublishVolume IsMountPoint failed error: %v", err)
+		}
 	}
 
+	// if mountPoint mount umount it
+	if isMnt {
+		if err = ns.mounter.Unmount(targetPath); err != nil {
+			if strings.Contains(err.Error(), "not mounted") {
+				glog.Warningf("NodeUnpublishVolume Unmount targetPath %s is umounted", targetPath)
+			} else {
+				return &csi.NodeUnpublishVolumeResponse{}, status.Errorf(codes.Internal, "NodeUnpublishVolume Unmount targetPath %s failed %v", targetPath, err)
+			}
+		}
+	}
+
+	// remove mountPoint
+	if err = os.Remove(targetPath); err != nil {
+		return &csi.NodeUnpublishVolumeResponse{}, status.Errorf(codes.Internal, "NodeUnpublishVolume Remove targetPath %s failed %v", targetPath, err)
+	}
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
@@ -91,56 +138,61 @@ func (ns *nodeServer) NodeStageVolume(ctx context.Context, req *csi.NodeStageVol
 	start := time.Now()
 	stagingTargetPath := req.GetStagingTargetPath()
 
+	glog.V(5).Infof("NodeStageVolume globalMount stagingTargetPath %s req %v", stagingTargetPath, req)
 	if err := ns.mount(stagingTargetPath, req.GetVolumeId(), req.GetVolumeContext()); err != nil {
-		return nil, err
+		return &csi.NodeStageVolumeResponse{}, status.Errorf(codes.Internal, "NodeStageVolume globalMount stagingTargetPath %s req %v err %v", stagingTargetPath, req, err)
 	}
 
 	duration := time.Since(start)
-	glog.Infof("NodeStageVolume mounted, stagingTargetPath:%v cost:%v", stagingTargetPath, duration)
+	glog.Infof("NodeStageVolume globalMount success, stagingTargetPath:%v cost:%v", stagingTargetPath, duration)
 
 	return &csi.NodeStageVolumeResponse{}, nil
 }
 
-func (ns *nodeServer) mount(targetPath, volumeName string, param map[string]string) (retErr error) {
-	defer func(){
-		if retErr != nil {
-			glog.Errorf("volume mount failed, remove the targetPath: %v, error: %v", targetPath, retErr.Error())
-			if err := os.Remove(targetPath); err != nil {
-				glog.Errorf("targetPath remove failed: %v", err.Error())
+func (ns *nodeServer) mount(targetPath, volumeName string, param map[string]string) (err error) {
+
+	// check mountPoint
+	isMnt, err := IsMountPoint(targetPath)
+	glog.V(5).Infof("mount targetPath %s isMnt %v err %v", targetPath, isMnt, err)
+	if err != nil {
+		if strings.Contains(err.Error(), "transport endpoint is not connected") {
+			if err = ns.mounter.Unmount(targetPath); err != nil {
+				if strings.Contains(err.Error(), "not mounted") {
+					glog.Warningf("mount corrupt mount Unmount targetPath %s unmounted", targetPath)
+				} else {
+					return status.Errorf(codes.Internal, "mount corrupt mount Unmount targetPath %s failed %v", targetPath, err)
+				}
 			}
+			isMnt = false
+		} else if os.IsNotExist(err) {
+			// os.IsNotExist(err)  not exist
+			if err = createMountPoint(targetPath); err != nil {
+				return status.Errorf(codes.Internal, "mount createMountPoint failed error: %v", err)
+			}
+		} else {
+			return status.Errorf(codes.Internal, "mount IsMountPoint failed error: %v", err)
 		}
-	}()
-	pathExists, pathErr := mount.PathExists(targetPath)
-	corruptedMnt := mount.IsCorruptedMnt(pathErr)
-	if pathExists && !corruptedMnt {
-		glog.Infof("volume already mounted correctly, stagingTargetPath: %v", targetPath)
-		return
 	}
 
-	if err := mount.CleanupMountPoint(targetPath, ns.mounter, false); err != nil {
-		retErr = status.Errorf(codes.Internal, "CleanupMountPoint fail, stagingTargetPath: %v error: %v", targetPath, err)
-		return 
+	// if mountPoint is right mount, return
+	if isMnt {
+		glog.Infof("mount volume already mounted correctly, stagingTargetPath: %v", targetPath)
+		return nil
 	}
 
-	if err := createMountPoint(targetPath); err != nil {
-		retErr = status.Errorf(codes.Internal, "createMountPoint fail, stagingTargetPath: %v error: %v", targetPath, err)
-		return 
-	}
-
+	// create cfs conn and mount cfs volume
 	cfsServer, err := newCfsServer(volumeName, param)
 	if err != nil {
-		retErr = status.Errorf(codes.InvalidArgument, "new cfs server failed: %v", err)
-		return 
+		return status.Errorf(codes.InvalidArgument, "mount new cfs server failed: %v", err)
 	}
 
-	if err := cfsServer.persistClientConf(targetPath); err != nil {
-		retErr = status.Errorf(codes.Internal, "persist client config file failed: %v", err)
-		return 
+	if err = cfsServer.persistClientConf(targetPath); err != nil {
+		return status.Errorf(codes.Internal, "mount persist client config file failed: %v", err)
+
 	}
 
-	if err := cfsServer.runClient(); err != nil {
-		retErr = status.Errorf(codes.Internal, "mount failed: %v", err)
-		return 
+	if err = cfsServer.runClient(); err != nil {
+		return status.Errorf(codes.Internal, "mount failed: %v", err)
 	}
 
 	return
@@ -150,11 +202,44 @@ func (ns *nodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstag
 	ns.mutex.Lock()
 	defer ns.mutex.Unlock()
 	stagingTargetPath := req.GetStagingTargetPath()
-	err := mount.CleanupMountPoint(stagingTargetPath, ns.mounter, false)
+
+	// check mountPoint
+	isMnt, err := IsMountPoint(stagingTargetPath)
+	glog.V(5).Infof("NodeUnstageVolume stagingTargetPath %s isMnt %v err %v", stagingTargetPath, isMnt, err)
 	if err != nil {
-		return nil, err
+		if strings.Contains(err.Error(), "transport endpoint is not connected") {
+			// crush mount point, need umount
+			isMnt = true
+		} else if os.IsNotExist(err) {
+			// os.IsNotExist(err)  not exist
+			glog.V(5).Infof("NodeUnstageVolume  IsNotExist stagingTargetPath %s not exist", stagingTargetPath)
+			return &csi.NodeUnstageVolumeResponse{}, nil
+		} else {
+			return &csi.NodeUnstageVolumeResponse{}, status.Errorf(codes.Internal, "NodeUnstageVolume IsMountPoint failed error: %v", err)
+		}
 	}
 
+	// if mountPoint is mount exec umount
+	if isMnt {
+		if err = ns.mounter.Unmount(stagingTargetPath); err != nil {
+			if strings.Contains(err.Error(), "not mounted") {
+				glog.Warningf("NodeUnstageVolume corrupt mount Unmount stagingTargetPath %s unmounted", stagingTargetPath)
+			} else {
+				return &csi.NodeUnstageVolumeResponse{}, status.Errorf(codes.Internal, "NodeUnstageVolume Unmount stagingTargetPath %s failed error: %v", stagingTargetPath, err)
+			}
+		}
+	}
+
+	// remove mountPoint
+	readonly_check := fmt.Sprintf("%s/.readonly_check", stagingTargetPath)
+	// not check readonly_check delete
+	if err = os.Remove(readonly_check); err != nil {
+		glog.Warningf("NodeUnstageVolume Remove readonly_check %s err %v", readonly_check, err)
+	}
+	if err = os.Remove(stagingTargetPath); err != nil {
+		return &csi.NodeUnstageVolumeResponse{}, status.Errorf(codes.Internal, "NodeUnstageVolume Remove stagingTargetPath %s failed error: %v", stagingTargetPath, err)
+	}
+	glog.Infof("NodeUnstageVolume  stagingTargetPath %s success", stagingTargetPath)
 	return &csi.NodeUnstageVolumeResponse{}, nil
 }
 
@@ -380,49 +465,63 @@ func (ns *nodeServer) remountDamagedVolumes(nodeName string) {
 	for _, pvp := range pvWithPods {
 		go func(p *persistentVolumeWithPods) {
 			defer wg.Done()
-
-			// remount globalmount
+			// need retry mount if error
+			glog.V(5).Infof("remountDamagedVolumes begin do volume mount %s", p.Name)
 			globalMountPath := filepath.Join(ns.KubeletRootDir, fmt.Sprintf("/plugins/kubernetes.io/csi/pv/%s/globalmount", p.Name))
-			if err := ns.mount(globalMountPath, p.Name, p.Spec.CSI.VolumeAttributes); err != nil {
-				glog.Warningf("remount damaged volume %q to path %q failed: %v\n", p.Name, globalMountPath, err)
-				return
+			var err error
+			for i := 0; i < 3; i++ {
+				// some times mount return success, actually is broken mount point, retry 3 time
+				err = ns.dealPodVolumeMount(p, globalMountPath)
+				if err != nil {
+					glog.Warningf("remountDamagedVolumes dealPodVolumeMount volume mount %s globalMountPath %s error %v", p.Name, globalMountPath, err)
+				}
 			}
-			glog.Infof("remount damaged volume %q to global mount path %q succeed.", p.Name, globalMountPath)
-
-			// bind globalmount to pods
-			for _, pod := range p.pods {
-				podDir := filepath.Join(ns.KubeletRootDir, "/pods/", string(pod.UID))
-
-				podMountPath := filepath.Join(podDir, fmt.Sprintf("/volumes/kubernetes.io~csi/%s/mount", p.Name))
-				if err := bindMount(globalMountPath, podMountPath); err != nil {
-					glog.Warningf("rebind damaged volume %q to path %q failed: %v\n", p.Name, podMountPath, err)
-					continue
-				}
-				glog.Infof("rebind damaged volume %q to pod mount path %q succeed.", p.Name, podMountPath)
-
-				// bind pod volume to subPath mount point
-				for _, container := range pod.Spec.Containers {
-					for i, volumeMount := range container.VolumeMounts {
-						if volumeMount.SubPath == "" {
-							continue
-						}
-
-						source := filepath.Join(podMountPath, volumeMount.SubPath)
-
-						// ref: https://github.com/kubernetes/kubernetes/blob/v1.22.0/pkg/volume/util/subpath/subpath_linux.go#L158
-						subMountPath := filepath.Join(podDir, "volume-subpaths", p.Name, container.Name, strconv.Itoa(i))
-						if err := bindMount(source, subMountPath); err != nil {
-							glog.Warningf("rebind damaged volume %q to sub mount path %q failed: %v\n", p.Name, subMountPath, err)
-							continue
-						}
-
-						glog.Infof("rebind damaged volume %q to sub mount path %q succeed.", p.Name, subMountPath)
-					}
-				}
+			if err == nil {
+				glog.V(5).Infof("remountDamagedVolumes dealPodVolumeMount volume mount %s globalMountPath %s success", globalMountPath, p.Name)
 			}
 		}(pvp)
 	}
 	wg.Wait()
 
-	glog.Infof("remount process finished cost %d ms", time.Since(startTime).Milliseconds())
+	glog.Infof("remountDamagedVolumes remount finished cost %d ms", time.Since(startTime).Milliseconds())
+}
+
+func (ns *nodeServer) dealPodVolumeMount(p *persistentVolumeWithPods, globalMountPath string) error {
+	if err := ns.mount(globalMountPath, p.Name, p.Spec.CSI.VolumeAttributes); err != nil {
+		return status.Errorf(codes.Internal, "dealPodVolumeMount globalMount mount volume %q to path %q failed: %v", p.Name, globalMountPath, err)
+	}
+
+	glog.Infof("dealPodVolumeMount volume %q to global mount path %q succeed.", p.Name, globalMountPath)
+	// bind globalmount to pods
+	for _, pod := range p.pods {
+		podDir := filepath.Join(ns.KubeletRootDir, "/pods/", string(pod.UID))
+
+		podMountPath := filepath.Join(podDir, fmt.Sprintf("/volumes/kubernetes.io~csi/%s/mount", p.Name))
+		if err := bindMount(globalMountPath, podMountPath); err != nil {
+			return status.Errorf(codes.Internal, "dealPodVolumeMount rebind damaged volume %q to path %q failed: %v\n", p.Name, podMountPath, err)
+		}
+
+		glog.Infof("dealPodVolumeMount rebind damaged volume %q to pod mount path %q succeed.", p.Name, podMountPath)
+
+		// bind pod volume to subPath mount point
+		for _, container := range pod.Spec.Containers {
+			for i, volumeMount := range container.VolumeMounts {
+				if volumeMount.SubPath == "" {
+					continue
+				}
+
+				source := filepath.Join(podMountPath, volumeMount.SubPath)
+
+				// ref: https://github.com/kubernetes/kubernetes/blob/v1.22.0/pkg/volume/util/subpath/subpath_linux.go#L158
+				subMountPath := filepath.Join(podDir, "volume-subpaths", p.Name, container.Name, strconv.Itoa(i))
+				glog.V(5).Infof("dealPodVolumeMount subMountPath stagingTargetPath  %s targetPath %s ", source, subMountPath)
+				if err := bindMount(source, subMountPath); err != nil {
+					return status.Errorf(codes.Internal, "dealPodVolumeMount rebind volume %q to sub mount path %q failed: %v\n", p.Name, subMountPath, err)
+				}
+
+				glog.Infof("dealPodVolumeMount rebind volume %q to sub mount path %q succeed.", p.Name, subMountPath)
+			}
+		}
+	}
+	return nil
 }
