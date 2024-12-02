@@ -499,11 +499,14 @@ func (ns *nodeServer) dealPodVolumeMount(p *persistentVolumeWithPods, globalMoun
 	}
 
 	glog.Infof("dealPodVolumeMount volume %q to global mount path %q succeed.", p.Name, globalMountPath)
-	// bind globalmount to pods
+	// bind globalmount to pods， mount --bind -o remount 可以解决mount --bind多次挂载问题，但不能解决挂载点损坏问题，需要umount掉再次mount
 	for _, pod := range p.pods {
 		podDir := filepath.Join(ns.KubeletRootDir, "/pods/", string(pod.UID))
 
 		podMountPath := filepath.Join(podDir, fmt.Sprintf("/volumes/kubernetes.io~csi/%s/mount", p.Name))
+		if err := ns.mounter.Unmount(podMountPath); err != nil {
+			glog.Warningf("dealPodVolumeMount Unmount podMountPath %s err %v", podMountPath, err)
+		}
 		if err := bindMount(globalMountPath, podMountPath); err != nil {
 			return status.Errorf(codes.Internal, "dealPodVolumeMount rebind damaged volume %q to path %q failed: %v\n", p.Name, podMountPath, err)
 		}
@@ -522,6 +525,9 @@ func (ns *nodeServer) dealPodVolumeMount(p *persistentVolumeWithPods, globalMoun
 				// ref: https://github.com/kubernetes/kubernetes/blob/v1.22.0/pkg/volume/util/subpath/subpath_linux.go#L158
 				subMountPath := filepath.Join(podDir, "volume-subpaths", p.Name, container.Name, strconv.Itoa(i))
 				glog.V(5).Infof("dealPodVolumeMount subMountPath stagingTargetPath  %s targetPath %s ", source, subMountPath)
+				if err := ns.mounter.Unmount(subMountPath); err != nil {
+					glog.Warningf("dealPodVolumeMount Unmount subMountPath %s err %v", subMountPath, err)
+				}
 				if err := bindMount(source, subMountPath); err != nil {
 					return status.Errorf(codes.Internal, "dealPodVolumeMount rebind volume %q to sub mount path %q failed: %v\n", p.Name, subMountPath, err)
 				}
