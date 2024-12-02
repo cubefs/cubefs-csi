@@ -68,8 +68,14 @@ func isMountPoint(targetPath string) (bool, error) {
 }
 
 func bindMount(stagingTargetPath string, targetPath string) error {
-	if _, err := execCommand("mount", "--bind", stagingTargetPath, targetPath); err != nil {
-		return fmt.Errorf("mount --bind %s to %s fail: %v", stagingTargetPath, targetPath, err)
+	// mount --bind will creat many mount point, after remount failed mount bind
+	if _, err := execCommand("mount", "-o", "remount", "--bind", stagingTargetPath, targetPath); err != nil {
+		if !strings.Contains(err.Error(), "mount point not mounted or bad option") {
+			return fmt.Errorf("mount -o remount --bind %s to %s fail: %v", stagingTargetPath, targetPath, err)
+		}
+		if _, err := execCommand("mount", "--bind", stagingTargetPath, targetPath); err != nil {
+			return fmt.Errorf("mount --bind %s to %s fail: %v", stagingTargetPath, targetPath, err)
+		}
 	}
 	return nil
 }

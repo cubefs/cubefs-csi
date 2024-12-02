@@ -448,6 +448,7 @@ func (ns *nodeServer) getAttachedPVWithPodsOnNode(nodeName string) ([]*persisten
 // remountDamagedVolumes try to remount all the volumes damaged during csi-node restart,
 // includes the GlobalMount per pv and BindMount per pod.
 func (ns *nodeServer) remountDamagedVolumes(nodeName string) {
+	// need retry mount if err, stat will return normal
 	startTime := time.Now()
 
 	pvWithPods, err := ns.getAttachedPVWithPodsOnNode(nodeName)
@@ -469,7 +470,7 @@ func (ns *nodeServer) remountDamagedVolumes(nodeName string) {
 			glog.V(5).Infof("remountDamagedVolumes begin do volume mount %s", p.Name)
 			globalMountPath := filepath.Join(ns.KubeletRootDir, fmt.Sprintf("/plugins/kubernetes.io/csi/pv/%s/globalmount", p.Name))
 			var err error
-			for i := 0; i < 3; i++ {
+			for i := 0; i < 5; i++ {
 				// some times mount return success, actually is broken mount point, retry 3 time
 				err = ns.dealPodVolumeMount(p, globalMountPath)
 				if err != nil {
@@ -484,9 +485,15 @@ func (ns *nodeServer) remountDamagedVolumes(nodeName string) {
 	wg.Wait()
 
 	glog.Infof("remountDamagedVolumes remount finished cost %d ms", time.Since(startTime).Milliseconds())
+
 }
 
 func (ns *nodeServer) dealPodVolumeMount(p *persistentVolumeWithPods, globalMountPath string) error {
+	// dealPodVolumeMount umount globalMountPath before
+	if err := ns.mounter.Unmount(globalMountPath); err != nil {
+		glog.Warningf("dealPodVolumeMount Unmount globalMountPath %s err %v", globalMountPath, err)
+	}
+
 	if err := ns.mount(globalMountPath, p.Name, p.Spec.CSI.VolumeAttributes); err != nil {
 		return status.Errorf(codes.Internal, "dealPodVolumeMount globalMount mount volume %q to path %q failed: %v", p.Name, globalMountPath, err)
 	}
