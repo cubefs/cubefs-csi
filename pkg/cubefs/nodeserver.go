@@ -472,11 +472,12 @@ func (ns *nodeServer) remountDamagedVolumes(nodeName string) {
 			globalMountPath := filepath.Join(ns.KubeletRootDir, fmt.Sprintf("/plugins/kubernetes.io/csi/pv/%s/globalmount", p.Name))
 			var err error
 			for i := 0; i < 5; i++ {
-				// some times mount return success, actually is broken mount point, retry 3 time
+				// some times mount return success, actually is broken mount point, retry 5 time
 				err = ns.dealPodVolumeMount(p, globalMountPath)
-				if err != nil {
-					glog.Warningf("remountDamagedVolumes dealPodVolumeMount volume mount %s globalMountPath %s error %v", p.Name, globalMountPath, err)
+				if err == nil {
+					break
 				}
+				glog.Warningf("remountDamagedVolumes dealPodVolumeMount volume mount %s globalMountPath %s error %v", p.Name, globalMountPath, err)
 			}
 			if err == nil {
 				glog.V(5).Infof("remountDamagedVolumes dealPodVolumeMount volume mount %s globalMountPath %s success", globalMountPath, p.Name)
