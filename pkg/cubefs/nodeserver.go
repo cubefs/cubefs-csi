@@ -19,6 +19,7 @@ package cubefs
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -490,7 +491,7 @@ func (ns *nodeServer) remountDamagedVolumes(nodeName string) {
 
 func (ns *nodeServer) dealPodVolumeMount(p *persistentVolumeWithPods, globalMountPath string) error {
 	// dealPodVolumeMount umount globalMountPath before
-	if err := ns.mounter.Unmount(globalMountPath); err != nil {
+	if err := forceUmount(globalMountPath); err != nil {
 		glog.Warningf("dealPodVolumeMount Unmount globalMountPath %s err %v", globalMountPath, err)
 	}
 
@@ -504,7 +505,7 @@ func (ns *nodeServer) dealPodVolumeMount(p *persistentVolumeWithPods, globalMoun
 		podDir := filepath.Join(ns.KubeletRootDir, "/pods/", string(pod.UID))
 
 		podMountPath := filepath.Join(podDir, fmt.Sprintf("/volumes/kubernetes.io~csi/%s/mount", p.Name))
-		if err := ns.mounter.Unmount(podMountPath); err != nil {
+		if err := forceUmount(podMountPath); err != nil {
 			glog.Warningf("dealPodVolumeMount Unmount podMountPath %s err %v", podMountPath, err)
 		}
 		if err := bindMount(globalMountPath, podMountPath); err != nil {
@@ -525,7 +526,7 @@ func (ns *nodeServer) dealPodVolumeMount(p *persistentVolumeWithPods, globalMoun
 				// ref: https://github.com/kubernetes/kubernetes/blob/v1.22.0/pkg/volume/util/subpath/subpath_linux.go#L158
 				subMountPath := filepath.Join(podDir, "volume-subpaths", p.Name, container.Name, strconv.Itoa(i))
 				glog.V(5).Infof("dealPodVolumeMount subMountPath stagingTargetPath  %s targetPath %s ", source, subMountPath)
-				if err := ns.mounter.Unmount(subMountPath); err != nil {
+				if err := forceUmount(subMountPath); err != nil {
 					glog.Warningf("dealPodVolumeMount Unmount subMountPath %s err %v", subMountPath, err)
 				}
 				if err := bindMount(source, subMountPath); err != nil {
@@ -535,6 +536,15 @@ func (ns *nodeServer) dealPodVolumeMount(p *persistentVolumeWithPods, globalMoun
 				glog.Infof("dealPodVolumeMount rebind volume %q to sub mount path %q succeed.", p.Name, subMountPath)
 			}
 		}
+	}
+	return nil
+}
+
+func forceUmount(target string) error {
+	command := exec.Command("umount", target)
+	output, err := command.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("forceUmount umount target err %v output %s", err, string(output))
 	}
 	return nil
 }
