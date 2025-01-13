@@ -3,7 +3,9 @@ package cubefs
 import (
 	"encoding/json"
 	"io"
+	"io/fs"
 	"net/http"
+	"os"
 	"testing"
 
 	"bou.ke/monkey"
@@ -74,4 +76,27 @@ func TestGetRequest(t *testing.T) {
 	assert.Equal(t, resp.Code, 200)
 	assert.Equal(t, resp.Msg, "OK")
 	assert.Equal(t, resp.Data, "Good")
+}
+
+func TestPersistClientConf(t *testing.T) {
+	monkey.Patch(os.WriteFile, func(filename string, data []byte, perm fs.FileMode) (err error) {
+		return nil
+	})
+	defer monkey.UnpatchAll()
+	s := &cfsServer{
+		clientConf: map[string]string{"mockKey": "mockValue"},
+	}
+	err := s.persistClientConf("")
+	assert.NoError(t, err)
+}
+
+func TestGetValueWithDefault(t *testing.T) {
+	param := map[string]string{
+		"someKey": "someValue",
+	}
+	got := getValueWithDefault(param, "someKey", "defaultVal")
+	assert.Equal(t, "someValue", got)
+
+	got = getValueWithDefault(param, "missingKey", "defaultVal")
+	assert.Equal(t, "defaultVal", got)
 }

@@ -17,6 +17,7 @@ limitations under the License.
 package cubefs
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -153,4 +154,22 @@ func TestExecCommand(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPathExists(t *testing.T) {
+	t.Run("path exists", func(t *testing.T) {
+		tmpFile, err := os.CreateTemp("", "exists-test")
+		assert.NoError(t, err)
+		defer os.Remove(tmpFile.Name())
+
+		exists, err := pathExists(tmpFile.Name())
+		assert.NoError(t, err)
+		assert.True(t, exists)
+	})
+
+	t.Run("path does not exist", func(t *testing.T) {
+		exists, err := pathExists("/nonexistent/path")
+		assert.NoError(t, err)
+		assert.False(t, exists)
+	})
 }
