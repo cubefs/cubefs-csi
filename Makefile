@@ -1,6 +1,6 @@
 # CubeFS CSI Makefile
 
-IMAGE_TAG=cubefs/cfs-csi-driver:3.0.0
+IMAGE_TAG=cubefs/cfs-csi-driver:3.5.1
 
 .PHONY: all build image push clean
 

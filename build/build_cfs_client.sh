@@ -3,7 +3,7 @@
 RootPath=$(cd "$(dirname $0)";pwd)
 test -e ${RootPath}/bin/cfs-client && exit 0
 test -d ${RootPath}/cubefs && rm -rf ${RootPath}/cubefs
-git clone https://github.com/cubefs/cubefs.git ${RootPath}/cubefs && cd ${RootPath}/cubefs 
+git clone --branch release-3.5.1 https://github.com/cubefs/cubefs.git ${RootPath}/cubefs && cd ${RootPath}/cubefs
 
 # make cubefs client of new version
 if [[ -n "$1" ]] ;then
