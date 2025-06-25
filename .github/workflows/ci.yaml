@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [master, ci]
+  pull_request:
+    branches: [master]
+
+jobs:
+  fetch-supported-k8s:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Fetch and generate matrix dynamically
+        id: set-matrix
+        run: |
+          # Fetch the latest Kubernetes support data from upstream
+          JSON_DATA=$(curl -s https://endoflife.date/api/kubernetes.json)
+
+          # Get the current date
+          TODAY=$(date +%Y-%m-%d)
+
+          # Filter versions that have not reached EOL and enforce patch=0
+          # because kind node image might not contains the latest patch version
+          SUPPORTED=$(echo "$JSON_DATA" | jq --arg TODAY "$TODAY" '[.[] | select(.eol > $TODAY) | "v"+.cycle+".0"]')
+
+          # Build the matrix JSON
+          MATRIX_JSON=$(jq -c '{k8s_version: .}' <<< "$SUPPORTED")
+
+          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+          echo "Matrix: $MATRIX_JSON"
+
+      - name: Debug matrix output
+        run: |
+          echo "Generated matrix:"
+          echo "${{ steps.set-matrix.outputs.matrix }}"
+
+  e2e-tests:
+    needs: fetch-supported-k8s
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.fetch-supported-k8s.outputs.matrix) }}
+    steps:
+      - name: Show selected Kubernetes version
+        run: echo "Testing on ${{ matrix.k8s_version }}"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Remove pre-installed software to free up disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android
+
+      - name: Set up Go 1.18
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.18
+      - name: Run e2e tests
+        run: |
+          mkdir -p artifacts
+          ARTIFACTS=artifacts E2E_K8S_VERSION=${{ matrix.k8s_version }} make test-e2e
+
+      - name: Upload artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-${{ matrix.k8s_version }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts
+          retention-days: 2

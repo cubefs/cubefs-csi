@@ -38,6 +38,13 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		return nil, err
 	}
 
+	// https://github.com/kubernetes-csi/external-provisioner/blob/master/pkg/controller/controller.go
+	for _, cap := range req.VolumeCapabilities {
+		if cap.GetBlock() != nil {
+			return nil, status.Error(codes.InvalidArgument, "block volume is not supported")
+		}
+	}
+
 	start := time.Now()
 	// Volume Size - Default is 1 GiB
 	capacity := req.GetCapacityRange().GetRequiredBytes()

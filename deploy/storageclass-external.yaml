@@ -1,0 +1,15 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: cfs-sc-external
+provisioner: csi.cubefs.com
+allowVolumeExpansion: true
+reclaimPolicy: Delete
+parameters:
+  # Replace with the actual masterAddr and consulAddr
+  # The default values are for the cubeFS cluster deployed via docker-compose.
+  # See https://github.com/cubefs/cubefs/blob/7a116351bfc950d0e01484a2a59f28beb202786c/docker/docker-compose.yml#L59
+  masterAddr: "192.168.0.11:17010"
+  consulAddr: "http://192.168.0.101:8500"
+  # Owner name as authentication
+  owner: "csiuser"

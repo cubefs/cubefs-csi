@@ -1,0 +1,16 @@
+# This is an example configuration for the cubeFS CSI driver used in e2e-test.sh
+StorageClass:
+  # align with the name of the storage class located in deploy/storageclass-external.yaml
+  FromExistingClassName: cfs-sc-external
+DriverInfo:
+  Name: csi.cubefs.com
+  SupportedSizeRange:
+    Min: 1Gi
+  Capabilities:
+    controllerExpansion: true
+    exec: true
+    multipods: true
+    nodeExpansion: true
+    persistence: true
+    singleNodeVolume: true
+    FSResizeFromSourceNotSupported: true

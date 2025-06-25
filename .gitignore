@@ -1,6 +1,7 @@
 # build directory
-build/bin/cfs-csi-driver
-build/bin/cfs-client
+bin
+build/bin
+cubefs
 .idea
 # git merge files
 *.orig
