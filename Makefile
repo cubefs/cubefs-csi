@@ -47,6 +47,7 @@ USE_EXISTING_CUBEFS_CLUSTER ?= false
 BASE_IMAGE ?= cubefs/cfs-csi-base:v0.0.1
 DOCKER_BUILDX_CMD ?= docker buildx
 IMAGE_BUILD_CMD ?= $(DOCKER_BUILDX_CMD) build
+IMAGE_PUSH_CMD ?= docker push
 IMAGE_BUILD_EXTRA_OPTS ?=
 IMAGE_REGISTRY ?= cubefs
 IMAGE_NAME ?= cfs-csi-driver
@@ -91,11 +92,11 @@ build:  ## Build csi driver binary
 
 .PHONY: image
 image: cfs-client build ## Build image
-	docker build -t $(IMG) ./build
+	$(IMAGE_BUILD_CMD) -t $(IMG) $(IMAGE_BUILD_EXTRA_OPTS) ./build
 
 .PHONY: push
 push: image ## Push image
-	docker push $(IMG)
+	$(IMAGE_PUSH_CMD) $(IMG)
 
 .PHONY: clean
 clean:  ## Clean build artifacts
