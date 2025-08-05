@@ -91,7 +91,7 @@ build:  ## Build csi driver binary
 
 .PHONY: image
 image: cfs-client build ## Build image
-	docker build -t $(IMG) ./build
+	docker build --platform $(GOOS)/$(GOARCH) -t $(IMG) ./build
 
 .PHONY: push
 push: image ## Push image
