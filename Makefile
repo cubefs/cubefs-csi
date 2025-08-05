@@ -95,7 +95,7 @@ image: cfs-client build ## Build image
 
 .PHONY: push
 push: image ## Push image
-	docker push $(IMG)
+	docker push --platform $(GOOS)/$(GOARCH) $(IMG)
 
 .PHONY: clean
 clean:  ## Clean build artifacts
