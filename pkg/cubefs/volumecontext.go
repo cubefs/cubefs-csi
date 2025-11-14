@@ -143,13 +143,13 @@ func ParsePodResource(volumeContext map[string]string) (req v1.ResourceList, lim
 	if cpu, err := resource.ParseQuantity(cpuReq); err == nil {
 		req[v1.ResourceCPU] = cpu
 	} else {
-		klog.Warningf("CPU请求无效: %s, 用默认值: %s", cpuReq, DefaultPodCPURequest)
+		klog.Warningf("invalid CPU Request: %s, using default value: %s", cpuReq, DefaultPodCPURequest)
 		req[v1.ResourceCPU] = resource.MustParse(DefaultPodCPURequest)
 	}
 	if mem, err := resource.ParseQuantity(memReq); err == nil {
 		req[v1.ResourceMemory] = mem
 	} else {
-		klog.Warningf("内存请求无效: %s, 用默认值: %s", memReq, DefaultPodMemRequest)
+		klog.Warningf("invalid Memory Request: %s, using default value: %s", memReq, DefaultPodMemRequest)
 		req[v1.ResourceMemory] = resource.MustParse(DefaultPodMemRequest)
 	}
 
@@ -157,13 +157,13 @@ func ParsePodResource(volumeContext map[string]string) (req v1.ResourceList, lim
 	if cpu, err := resource.ParseQuantity(cpuLimit); err == nil {
 		limit[v1.ResourceCPU] = cpu
 	} else {
-		klog.Warningf("CPU限制无效: %s, 用默认值: %s", cpuLimit, DefaultPodCPULimit)
+		klog.Warningf("invalid CPU Limit: %s, using default value: %s", cpuLimit, DefaultPodCPULimit)
 		limit[v1.ResourceCPU] = resource.MustParse(DefaultPodCPULimit)
 	}
 	if mem, err := resource.ParseQuantity(memLimit); err == nil {
 		limit[v1.ResourceMemory] = mem
 	} else {
-		klog.Warningf("内存限制无效: %s, 用默认值: %s", memLimit, DefaultPodMemLimit)
+		klog.Warningf("invalid Memory Limit: %s, using default value: %s", memLimit, DefaultPodMemLimit)
 		limit[v1.ResourceMemory] = resource.MustParse(DefaultPodMemLimit)
 	}
 
