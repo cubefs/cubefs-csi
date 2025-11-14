@@ -120,6 +120,11 @@ func (ns *nodeServer) buildPodSpec(ctx context.Context, targetPath, volName stri
 					BlockOwnerDeletion: func() *bool { b := true; return &b }(),
 				},
 			},
+			Annotations: map[string]string{
+				"container.apparmor.security.beta.kubernetes.io/cubefs-client": "unconfined",
+				"io.kubernetes.cri-o.userns-mode":                              "host",
+				"kubernetes.io/psp":                                            "privileged",
+			},
 		},
 		Spec: v1.PodSpec{
 			NodeName:      ns.Driver.NodeID,
