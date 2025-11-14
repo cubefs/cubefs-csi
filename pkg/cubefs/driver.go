@@ -26,8 +26,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/utils/mount"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/mount"
 )
 
 const DriverName = "csi.cubefs.com"
