@@ -21,11 +21,11 @@ import (
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	csicommon "github.com/cubefs/cubefs-csi/pkg/csi-common"
-	"github.com/golang/glog"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/klog/v2"
 )
 
 type controllerServer struct {
@@ -53,23 +53,27 @@ func (cs *controllerServer) CreateVolume(ctx context.Context, req *csi.CreateVol
 		return nil, status.Error(codes.InvalidArgument, "apply for at least 1GB of space")
 	}
 
+	klog.Infof("CreateVolume GetParameters: %v", req.GetParameters())
+
+	SetDefaultVolumeName(req.GetName())
+	volumeContext := PickupVolumeContext(req.GetParameters())
 	volName := req.GetName()
-	cfsServer, err := newCfsServer(volName, req.GetParameters())
+	cfsServer, err := NewCfsServer(volName, volumeContext)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	if err := cfsServer.createVolume(capacityGB); err != nil {
+	if err := cfsServer.CreateVolume(capacityGB); err != nil {
 		return nil, err
 	}
 
 	duration := time.Since(start)
-	glog.V(0).Infof("create volume[%v] success. cost time:%v", volName, duration)
+	klog.Infof("create volume[%v] success. cost time:%v", volName, duration)
 	return &csi.CreateVolumeResponse{
 		Volume: &csi.Volume{
 			VolumeId:      volName,
 			CapacityBytes: capacity,
-			VolumeContext: cfsServer.clientConf,
+			VolumeContext: volumeContext,
 		},
 	}, nil
 }
@@ -86,16 +90,16 @@ func (cs *controllerServer) DeleteVolume(ctx context.Context, req *csi.DeleteVol
 	}
 
 	param := persistentVolume.Spec.CSI.VolumeAttributes
-	cfsServer, err := newCfsServer(volumeName, param)
+	cfsServer, err := NewCfsServer(volumeName, param)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	err = cfsServer.deleteVolume()
+	err = cfsServer.DeleteVolume()
 	if err != nil {
 		return nil, status.Error(codes.Unknown, err.Error())
 	} else {
-		glog.V(0).Infof("delete volume:%v success.", volumeName)
+		klog.Infof("delete volume:%v success.", volumeName)
 	}
 
 	return &csi.DeleteVolumeResponse{}, nil
@@ -123,13 +127,13 @@ func (cs *controllerServer) ControllerExpandVolume(ctx context.Context, req *csi
 	}
 
 	attr := pv.Spec.CSI.VolumeAttributes
-	cfsServer, err := newCfsServer(pvName, attr)
+	cfsServer, err := NewCfsServer(pvName, attr)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "newCfsServer[%v] error:%v", pvName, err)
+		return nil, status.Errorf(codes.InvalidArgument, "NewCfsServer[%v] error:%v", pvName, err)
 	}
 
 	capacityGB := req.CapacityRange.RequiredBytes >> 30
-	err = cfsServer.expandVolume(capacityGB)
+	err = cfsServer.ExpandVolume(capacityGB)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "expandVolume[%v] error:%v", pvName, err)
 	}

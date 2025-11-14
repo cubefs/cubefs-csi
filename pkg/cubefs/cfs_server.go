@@ -24,123 +24,169 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 	"time"
 
 	csicommon "github.com/cubefs/cubefs-csi/pkg/csi-common"
-	"github.com/golang/glog"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"k8s.io/klog/v2"
 )
 
 const (
-	KVolumeName   = "volName"
-	KMasterAddr   = "masterAddr"
-	KLogLevel     = "logLevel"
-	KLogDir       = "logDir"
-	KOwner        = "owner"
-	KMountPoint   = "mountPoint"
-	KExporterPort = "exporterPort"
-	KProfPort     = "profPort"
-	KCrossZone    = "crossZone"
-	KEnableToken  = "enableToken"
-	KZoneName     = "zoneName"
-	KConsulAddr   = "consulAddr"
-	KVolType      = "volType"
+	DefaultClientConfPath = "/cfs/conf"
+	DefaultLogDir         = "/cfs/logs"
+	CfsClientBin          = "/cfs/bin/cfs-client"
+
+	CfsConfArg     = "-c"    // 配置文件参数标识
+	JsonFileSuffix = ".json" // 配置文件后缀
 )
 
 const (
-	defaultClientConfPath     = "/cfs/conf/"
-	defaultLogDir             = "/cfs/logs/"
-	defaultExporterPort   int = 9513
-	defaultProfPort       int = 10094
-	defaultLogLevel           = "info"
-	jsonFileSuffix            = ".json"
-	defaultConsulAddr         = "http://consul-service.cubefs.svc.cluster.local:8500"
-	defaultVolType            = "0"
+	DefaultCfsExporterPort int    = 9513
+	DefaultCfsProfPort     int    = 10094
+	DefaultCfsZoneName     string = "default"
+	DefaultCfsLogLevel     string = "warn"
+	DefaultCfsConsulAddr   string = "http://consul-service.cubefs.svc.cluster.local:8500"
+	DefaultCfsVolType      string = "0"
 )
 
 const (
-	ErrCodeVolNotExists = 7
-
-	ErrDuplicateVolMsg = "duplicate vol"
+	// 错误码与消息
+	ErrCodeVolNotExists = 7               // 卷不存在错误码
+	ErrDuplicateVolMsg  = "duplicate vol" // 卷已存在消息
 )
 
-type cfsServer struct {
-	clientConfFile string
-	masterAddrs    []string
-	clientConf     map[string]string
-}
-
-// Create and Delete Volume Response
 type cfsServerResponse struct {
 	Code int    `json:"code"`
 	Msg  string `json:"msg"`
 	Data string `json:"data,omitempty"`
 }
 
-func newCfsServer(volName string, param map[string]string) (cs *cfsServer, err error) {
-	masterAddr := param[KMasterAddr]
-	if len(volName) == 0 || len(masterAddr) == 0 {
+type cfsExtraParams struct {
+	MasterAddrList []string
+	ZoneName       string
+	CrossZone      bool
+	EnableToken    bool
+}
+
+type cfsClientConf struct {
+	MountPoint string `json:"mountPoint"`
+	MasterAddr string `json:"masterAddr"`
+	VolName    string `json:"volName"`
+	Owner      string `json:"owner"`
+	AccessKey  string `json:"accessKey"`
+	SecretKey  string `json:"secretKey"`
+
+	LogLevel string `json:"logLevel"`
+	LogDir   string `json:"logDir"`
+	Rdonly   bool   `json:"rdonly"`
+
+	VolType      string `json:"volType"`
+	ExporterPort int    `json:"exporterPort"`
+	ProfPort     string `json:"profPort"`
+	ConsulAddr   string `json:"consulAddr"`
+}
+
+type cfsServer struct {
+	clientConfFile string
+	extraParams    cfsExtraParams
+	clientConf     cfsClientConf
+}
+
+func NewCfsServer(pvName string, param map[string]string) (*cfsServer, error) {
+	masterAddrStr := param[KeyCfsMaster]
+	volName := getParamWithDefault(param, KeyCfsVolName, pvName)
+	if len(masterAddrStr) == 0 || len(volName) == 0 {
 		return nil, fmt.Errorf("invalid argument for initializing cfsServer")
 	}
 
-	newVolName := getValueWithDefault(param, KVolumeName, volName)
-	clientConfFile := defaultClientConfPath + newVolName + jsonFileSuffix
-	newOwner := csicommon.ShortenString(fmt.Sprintf("csi_%d", time.Now().UnixNano()), 20)
-	param[KMasterAddr] = masterAddr
-	param[KVolumeName] = newVolName
-	param[KOwner] = getValueWithDefault(param, KOwner, newOwner)
-	param[KLogLevel] = getValueWithDefault(param, KLogLevel, defaultLogLevel)
-	param[KLogDir] = defaultLogDir + newVolName
-	param[KConsulAddr] = getValueWithDefault(param, KConsulAddr, defaultConsulAddr)
-	param[KVolType] = getValueWithDefault(param, KVolType, defaultVolType)
+	// masterAddrList
+	masterAddrList := strings.Split(masterAddrStr, ",")
+	for i, addr := range masterAddrList {
+		masterAddrList[i] = strings.TrimSpace(addr)
+		if masterAddrList[i] == "" {
+			return nil, fmt.Errorf("invalid masterAddr: %s", masterAddrStr)
+		}
+	}
+
 	return &cfsServer{
-		clientConfFile: clientConfFile,
-		masterAddrs:    strings.Split(masterAddr, ","),
-		clientConf:     param,
-	}, err
+		clientConfFile: path.Join(DefaultClientConfPath, volName+JsonFileSuffix),
+		extraParams: cfsExtraParams{
+			MasterAddrList: masterAddrList,
+			ZoneName:       getParamWithDefault(param, KeyCfsZoneName, DefaultCfsZoneName),
+			CrossZone:      parseBool(param[KeyCfsCrossZone]),
+			EnableToken:    parseBool(param[KeyCfsEnableToken]),
+		},
+		clientConf: cfsClientConf{
+			MasterAddr: masterAddrStr,
+			VolName:    volName,
+			Owner:      getParamWithDefault(param, KeyCfsOwner, generateOwner()),
+			AccessKey:  param[KeyCfsAccessKey],
+			SecretKey:  param[KeyCfsSecretKey],
+			LogLevel:   getParamWithDefault(param, KeyCfsLogLevel, DefaultCfsLogLevel),
+			LogDir:     path.Join(DefaultLogDir, volName),
+			Rdonly:     parseBool(param[KeyCfsReadOnly]),
+			VolType:    getParamWithDefault(param, KeyCfsVolType, DefaultCfsVolType),
+			ConsulAddr: getParamWithDefault(param, KeyCfsConsulAddr, DefaultCfsConsulAddr),
+		},
+	}, nil
 }
 
-func getValueWithDefault(param map[string]string, key string, defaultValue string) string {
-	value := param[key]
-	if len(value) == 0 {
-		value = defaultValue
-	}
-
-	return value
-}
-
-func (cs *cfsServer) persistClientConf(mountPoint string) error {
-	exporterPort, _ := getFreePort(defaultExporterPort)
-	profPort, _ := getFreePort(defaultProfPort)
-	cs.clientConf[KMountPoint] = mountPoint
-	cs.clientConf[KExporterPort] = strconv.Itoa(exporterPort)
-	cs.clientConf[KProfPort] = strconv.Itoa(profPort)
-	_ = os.Mkdir(cs.clientConf[KLogDir], 0777)
-	clientConfBytes, _ := json.Marshal(cs.clientConf)
-	err := ioutil.WriteFile(cs.clientConfFile, clientConfBytes, 0444)
+// PersistClientConf 生成客户端配置文件
+func (cs *cfsServer) PersistClientConf(mountPoint string) error {
+	exporterPort, err := getFreePort(DefaultCfsExporterPort)
 	if err != nil {
-		return status.Errorf(codes.Internal, "create client config file fail. err: %v", err.Error())
+		klog.Warningf("failed to allocate exporterPort err: %v, set default: %d", err, DefaultCfsExporterPort)
+		exporterPort = DefaultCfsExporterPort
+	}
+	profPort, err := getFreePort(DefaultCfsProfPort)
+	if err != nil {
+		klog.Warningf("failed to allocate profPort err: %v, set default: %d", err, DefaultCfsProfPort)
+		profPort = DefaultCfsProfPort
+	}
+	cs.clientConf.MountPoint = mountPoint
+	cs.clientConf.ExporterPort = exporterPort
+	cs.clientConf.ProfPort = strconv.Itoa(profPort)
+
+	// 创建配置目录与日志目录
+	if err := os.MkdirAll(DefaultClientConfPath, 0755); err != nil {
+		return fmt.Errorf("conf dir: %s, err: %v", DefaultClientConfPath, err)
+	}
+	if err := os.MkdirAll(cs.clientConf.LogDir, 0755); err != nil {
+		return fmt.Errorf("log dir: %s, err: %v", cs.clientConf.LogDir, err)
 	}
 
-	glog.V(0).Infof("create client config file success, volumeId:%v", cs.clientConf[KVolumeName])
+	// 生成JSON配置文件
+	confBytes, err := json.MarshalIndent(cs.clientConf, "", "  ")
+	if err != nil {
+		return fmt.Errorf("json marshal err: %v", err)
+	}
+	if err := ioutil.WriteFile(cs.clientConfFile, confBytes, 0644); err != nil {
+		return fmt.Errorf("write config file %s fail, err: %v", cs.clientConfFile, err)
+	}
+
+	klog.Infof("create config file success: %s", cs.clientConfFile)
 	return nil
 }
 
-func (cs *cfsServer) createVolume(capacityGB int64) (err error) {
-	valName := cs.clientConf[KVolumeName]
-	owner := cs.clientConf[KOwner]
-	crossZone := cs.clientConf[KCrossZone]
-	token := cs.clientConf[KEnableToken]
-	zone := cs.clientConf[KZoneName]
-	volType := cs.clientConf[KVolType]
+func (cs *cfsServer) CreateVolume(capacityGB int64) error {
+	volName := cs.clientConf.VolName
+	owner := cs.clientConf.Owner
+	crossZone := cs.extraParams.CrossZone
+	enableToken := cs.extraParams.EnableToken
+	zoneName := cs.extraParams.ZoneName
+	volType := cs.clientConf.VolType
 
 	return cs.forEachMasterAddr("CreateVolume", func(addr string) error {
-		url := fmt.Sprintf("http://%s/admin/createVol?name=%s&capacity=%v&owner=%v&crossZone=%v&enableToken=%v&zoneName=%v&volType=%v",
-			addr, valName, capacityGB, owner, crossZone, token, zone, volType)
-		glog.Infof("createVol url: %v", url)
+		url := fmt.Sprintf(
+			"http://%s/admin/createVol?name=%s&capacity=%d&owner=%s&crossZone=%t&enableToken=%t&zoneName=%s&volType=%s",
+			addr, volName, capacityGB, owner, crossZone, enableToken, zoneName, volType,
+		)
+		klog.Infof("CreateVolume API: %s", url)
+
 		resp, err := cs.executeRequest(url)
 		if err != nil {
 			return err
@@ -148,44 +194,28 @@ func (cs *cfsServer) createVolume(capacityGB int64) (err error) {
 
 		if resp.Code != 0 {
 			if strings.Contains(resp.Msg, ErrDuplicateVolMsg) {
-				glog.Warningf("duplicate to create volume. url(%v) msg: %v", url, resp.Msg)
+				klog.Warningf("duplicate to create volume %s", volName)
 				return nil
 			}
-
-			return fmt.Errorf("create volume failed: url(%v) code=(%v), msg: %v", url, resp.Code, resp.Msg)
+			return fmt.Errorf("create volume failed, volName: %s, code: %d, msg: %s", volName, resp.Code, resp.Msg)
 		}
 
+		klog.Infof("CreateVolume success: %s", volName)
 		return nil
 	})
 }
 
-func (cs *cfsServer) forEachMasterAddr(stage string, f func(addr string) error) (err error) {
-	for _, addr := range cs.masterAddrs {
-		if err = f(addr); err == nil {
-			break
-		}
-
-		glog.Warningf("try %s with master %q failed: %v", stage, addr, err)
-	}
-
-	if err != nil {
-		glog.Errorf("%s failed with all masters: %v", stage, err)
-		return err
-	}
-
-	return nil
-}
-
-func (cs *cfsServer) deleteVolume() (err error) {
+func (cs *cfsServer) DeleteVolume() error {
+	volName := cs.clientConf.VolName
 	ownerMd5, err := cs.getOwnerMd5()
 	if err != nil {
-		return err
+		return fmt.Errorf("calculate md5(owner) failed, volName: %s, err: %v", volName, err)
 	}
 
-	valName := cs.clientConf[KVolumeName]
 	return cs.forEachMasterAddr("DeleteVolume", func(addr string) error {
-		url := fmt.Sprintf("http://%s/vol/delete?name=%s&authKey=%v", addr, valName, ownerMd5)
-		glog.Infof("deleteVol url: %v", url)
+		url := fmt.Sprintf("http://%s/vol/delete?name=%s&authKey=%s", addr, volName, ownerMd5)
+		klog.Infof("DeleteVolume API: %s", url)
+
 		resp, err := cs.executeRequest(url)
 		if err != nil {
 			return err
@@ -193,70 +223,93 @@ func (cs *cfsServer) deleteVolume() (err error) {
 
 		if resp.Code != 0 {
 			if resp.Code == ErrCodeVolNotExists {
-				glog.Warningf("volume[%s] not exists, assuming the volume has already been deleted. code:%v, msg:%v",
-					valName, resp.Code, resp.Msg)
+				klog.Warningf("volume does not exist: %s, skip deletion", volName)
 				return nil
 			}
-			return fmt.Errorf("delete volume[%s] is failed. code:%v, msg:%v", valName, resp.Code, resp.Msg)
+			return fmt.Errorf("delete volume failed, volName: %s, code: %d, msg: %s", volName, resp.Code, resp.Msg)
 		}
 
+		klog.Infof("DeleteVolume success: %s", volName)
 		return nil
 	})
 }
 
-func (cs *cfsServer) executeRequest(url string) (*cfsServerResponse, error) {
-	httpResp, err := http.Get(url)
-	if err != nil {
-		return nil, status.Errorf(codes.Unavailable, "request url failed, url(%v) err(%v)", url, err)
-	}
-
-	defer httpResp.Body.Close()
-	body, err := ioutil.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, status.Errorf(codes.Unavailable, "read http response body, url(%v) bodyLen(%v) err(%v)", url, len(body), err)
-	}
-
-	resp := &cfsServerResponse{}
-	if err := json.Unmarshal(body, resp); err != nil {
-		return nil, status.Errorf(codes.Unavailable, "unmarshal http response body, url(%v) msg(%v) err(%v)", url, resp.Msg, err)
-	}
-	return resp, nil
-}
-
-func (cs *cfsServer) runClient() error {
-	return mountVolume(cs.clientConfFile)
-}
-
-func (cs *cfsServer) expandVolume(capacityGB int64) (err error) {
+func (cs *cfsServer) ExpandVolume(capacityGB int64) error {
+	volName := cs.clientConf.VolName
 	ownerMd5, err := cs.getOwnerMd5()
 	if err != nil {
-		return err
+		return fmt.Errorf("calculate md5(owner) failed, volName: %s, err: %v", volName, err)
 	}
 
-	volName := cs.clientConf[KVolumeName]
-
 	return cs.forEachMasterAddr("ExpandVolume", func(addr string) error {
-		url := fmt.Sprintf("http://%s/vol/expand?name=%s&authKey=%v&capacity=%v", addr, volName, ownerMd5, capacityGB)
-		glog.Infof("expandVolume url: %v", url)
+		url := fmt.Sprintf("http://%s/vol/expand?name=%s&authKey=%s&capacity=%d", addr, volName, ownerMd5, capacityGB)
+		klog.Infof("ExpandVolume API: %s", url)
+
 		resp, err := cs.executeRequest(url)
 		if err != nil {
 			return err
 		}
 
 		if resp.Code != 0 {
-			return fmt.Errorf("expand volume[%v] failed, code:%v, msg:%v", volName, resp.Code, resp.Msg)
+			return fmt.Errorf("expand volume failed, volName: %s, code: %d, msg: %s", volName, resp.Code, resp.Msg)
 		}
 
+		klog.Infof("ExpandVolume success: %s, capacity: %dGB", volName, capacityGB)
 		return nil
 	})
 }
 
-func (cs *cfsServer) getOwnerMd5() (string, error) {
-	owner := cs.clientConf[KOwner]
-	key := md5.New()
-	if _, err := key.Write([]byte(owner)); err != nil {
-		return "", status.Errorf(codes.Internal, "calc owner[%v] md5 fail. err(%v)", owner, err)
+func parseBool(val string) bool {
+	ok, _ := strconv.ParseBool(val)
+	return ok
+}
+
+func generateOwner() string {
+	return csicommon.ShortenString(fmt.Sprintf("csi_%d", time.Now().UnixNano()), 20)
+}
+
+func (cs *cfsServer) forEachMasterAddr(stage string, f func(addr string) error) error {
+	var lastErr error
+	for _, addr := range cs.extraParams.MasterAddrList {
+		var err error
+		if err = f(addr); err == nil {
+			return nil
+		}
+		lastErr = err
+		klog.Warningf("try %s with master %q failed: %v", stage, addr, err)
+	}
+	return fmt.Errorf("%s failed with all masters: %v", stage, lastErr)
+}
+
+func (cs *cfsServer) executeRequest(url string) (*cfsServerResponse, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, status.Errorf(codes.Unavailable, "request url failed, url(%s) err(%v)", url, err)
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, status.Errorf(codes.Unavailable, "read http response body, url(%s) bodyLen(%d) err(%v)", url, len(body), err)
 	}
 
-	return hex.EncodeToString(key.Sum(nil)), nil
+	var serverResp cfsServerResponse
+	if err := json.Unmarshal(body, &serverResp); err != nil {
+		return nil, status.Errorf(codes.Unavailable, "unmarshal http response body, url(%s) msg(%s) err(%v)", url, string(body), err)
+	}
+
+	return &serverResp, nil
+}
+
+func (cs *cfsServer) getOwnerMd5() (string, error) {
+	owner := cs.clientConf.Owner
+	if owner == "" {
+		return "", fmt.Errorf("empty owner")
+	}
+
+	h := md5.New()
+	if _, err := h.Write([]byte(owner)); err != nil {
+		return "", status.Errorf(codes.Internal, "calc owner[%v] md5 fail. err(%v)", owner, err)
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
