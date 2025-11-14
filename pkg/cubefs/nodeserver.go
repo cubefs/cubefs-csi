@@ -121,7 +121,7 @@ func (ns *nodeServer) buildPodSpec(ctx context.Context, targetPath, volName stri
 				},
 			},
 			Annotations: map[string]string{
-				"container.apparmor.security.beta.kubernetes.io/cubefs-client": "unconfined",
+				"container.apparmor.security.beta.kubernetes.io/cfs-clientpod": "unconfined",
 				"io.kubernetes.cri-o.userns-mode":                              "host",
 				"kubernetes.io/psp":                                            "privileged",
 			},
