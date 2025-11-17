@@ -31,21 +31,26 @@ import (
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/mount"
 )
 
+type CSINodeSchedulingConfig struct {
+	NodeSelector map[string]string
+	NodeAffinity *corev1.NodeAffinity
+	Tolerations  []corev1.Toleration
+}
+
 type nodeServer struct {
 	Config
 	*csicommon.DefaultNodeServer
-	mounter mount.Interface
-	mutex   sync.RWMutex
-	// NodeSelector
-	initOnceNodeSelector sync.Once
-	nodeSelector         map[string]string
+	mounter                      mount.Interface
+	mutex                        sync.RWMutex
+	initOnceNodeSchedulingConfig sync.Once
+	nodeSchedulingConfig         *CSINodeSchedulingConfig
 }
 
 func (ns *nodeServer) getCurrentNamespace() string {
@@ -60,10 +65,12 @@ func (ns *nodeServer) getCurrentNamespace() string {
 	return namespace
 }
 
-func (ns *nodeServer) initNodeSelector() {
-	var nodeSelector map[string]string
-	var defaultNodeSelector map[string]string = map[string]string{"component.cubefs.io/csi": "enabled"}
-
+func (ns *nodeServer) extractCSINodeSchedulingConfig() *CSINodeSchedulingConfig {
+	defaultConfig := &CSINodeSchedulingConfig{
+		NodeSelector: map[string]string{},
+		NodeAffinity: nil,
+		Tolerations:  []corev1.Toleration{},
+	}
 	namespace := ns.getCurrentNamespace()
 	pods, err := ns.Driver.ClientSet.CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{
 		FieldSelector: fmt.Sprintf("spec.nodeName=%s", ns.Driver.NodeID),
@@ -72,30 +79,45 @@ func (ns *nodeServer) initNodeSelector() {
 	})
 	if err != nil {
 		klog.Warningf("filtering CSI node Pod failed: %v", err)
-		nodeSelector = defaultNodeSelector
+		return defaultConfig
 	}
 	if len(pods.Items) == 0 {
 		klog.Warningf("CSI node Pod not found on node %s", ns.Driver.NodeID)
-		nodeSelector = defaultNodeSelector
+		return defaultConfig
 	}
 	csiNodePod := &pods.Items[0]
 	klog.Infof("successfully located local CSI node Pod: %s/%s", namespace, csiNodePod.Name)
-	nodeSelector = csiNodePod.Spec.NodeSelector
+
+	nodeSelector := csiNodePod.Spec.NodeSelector
 	if len(nodeSelector) == 0 {
 		klog.Warningf("Pod %s is not configured with NodeSelector", csiNodePod.Name)
-		nodeSelector = defaultNodeSelector
+		nodeSelector = defaultConfig.NodeSelector
 	}
-	ns.nodeSelector = nodeSelector
-	klog.Infof("initNodeSelector success: %v", nodeSelector)
+	var nodeAffinity *corev1.NodeAffinity
+	if csiNodePod.Spec.Affinity != nil && csiNodePod.Spec.Affinity.NodeAffinity != nil {
+		nodeAffinity = csiNodePod.Spec.Affinity.NodeAffinity
+	}
+	tolerations := csiNodePod.Spec.Tolerations
+	nodeSchedulingConfig := &CSINodeSchedulingConfig{
+		NodeSelector: nodeSelector,
+		NodeAffinity: nodeAffinity,
+		Tolerations:  tolerations,
+	}
+	klog.Infof("extractCSINodeSchedulingConfig success: %v", nodeSchedulingConfig)
+	return nodeSchedulingConfig
 }
 
-func (ns *nodeServer) getNodeSelector() map[string]string {
-	ns.initOnceNodeSelector.Do(ns.initNodeSelector)
-	return ns.nodeSelector
+func (ns *nodeServer) initSchedulingConfig() {
+	ns.nodeSchedulingConfig = ns.extractCSINodeSchedulingConfig()
+}
+
+func (ns *nodeServer) GetInheritedSchedulingConfig() *CSINodeSchedulingConfig {
+	ns.initOnceNodeSchedulingConfig.Do(ns.initSchedulingConfig)
+	return ns.nodeSchedulingConfig
 }
 
 // buildPodSpec 构建Cubefs Client Pod规格
-func (ns *nodeServer) buildPodSpec(ctx context.Context, targetPath, volName string, volumeContext map[string]string) (*v1.Pod, error) {
+func (ns *nodeServer) buildPodSpec(ctx context.Context, targetPath, volName string, volumeContext map[string]string) (*corev1.Pod, error) {
 	pvcName := getParamWithDefault(volumeContext, KeyCSIPVCName, "")
 	pvcNamespace := getParamWithDefault(volumeContext, KeyCSIPVCNamespace, "")
 	clientImage := getParamWithDefault(volumeContext, KeyPodClientImage, "")
@@ -144,7 +166,8 @@ func (ns *nodeServer) buildPodSpec(ctx context.Context, targetPath, volName stri
 		clientConfContent, confFilePath,
 		CfsClientBin, CfsConfArg, confFilePath,
 	)
-	return &v1.Pod{
+	schedulingConfig := ns.GetInheritedSchedulingConfig()
+	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("cfs-clientpod-%s", pvcName),
 			Namespace: pvcNamespace,
@@ -169,38 +192,38 @@ func (ns *nodeServer) buildPodSpec(ctx context.Context, targetPath, volName stri
 				"kubernetes.io/psp":                                            "privileged",
 			},
 		},
-		Spec: v1.PodSpec{
+		Spec: corev1.PodSpec{
 			NodeName:      ns.Driver.NodeID,
-			RestartPolicy: v1.RestartPolicyAlways,
-			Containers: []v1.Container{
+			RestartPolicy: corev1.RestartPolicyAlways,
+			Containers: []corev1.Container{
 				{
 					Name:    "cfs-clientpod",
 					Image:   clientImage,
 					Command: []string{"bash", "-c", runCmd},
-					Resources: v1.ResourceRequirements{
+					Resources: corev1.ResourceRequirements{
 						Requests: resourceReq,
 						Limits:   resourceLimit,
 					},
-					SecurityContext: &v1.SecurityContext{
+					SecurityContext: &corev1.SecurityContext{
 						Privileged: func() *bool { b := true; return &b }(),
-						Capabilities: &v1.Capabilities{
-							Add: []v1.Capability{"SYS_ADMIN"},
+						Capabilities: &corev1.Capabilities{
+							Add: []corev1.Capability{"SYS_ADMIN"},
 						},
 					},
-					VolumeMounts: []v1.VolumeMount{
+					VolumeMounts: []corev1.VolumeMount{
 						{Name: "cfs-conf", MountPath: DefaultClientConfPath, ReadOnly: false},
 						{Name: "cfs-logs", MountPath: DefaultLogDir, ReadOnly: false},
-						{Name: "csi-target-mount", MountPath: targetPath, ReadOnly: false, MountPropagation: func() *v1.MountPropagationMode { m := v1.MountPropagationBidirectional; return &m }()},
+						{Name: "csi-target-mount", MountPath: targetPath, ReadOnly: false, MountPropagation: func() *corev1.MountPropagationMode { m := corev1.MountPropagationBidirectional; return &m }()},
 					},
-					LivenessProbe: &v1.Probe{
-						Handler:             v1.Handler{Exec: &v1.ExecAction{Command: []string{"mountpoint", targetPath}}},
+					LivenessProbe: &corev1.Probe{
+						Handler:             corev1.Handler{Exec: &corev1.ExecAction{Command: []string{"mountpoint", targetPath}}},
 						InitialDelaySeconds: 30,
 						TimeoutSeconds:      3,
 						PeriodSeconds:       5,
 						FailureThreshold:    3,
 					},
-					ReadinessProbe: &v1.Probe{
-						Handler:             v1.Handler{Exec: &v1.ExecAction{Command: []string{"mountpoint", targetPath}}},
+					ReadinessProbe: &corev1.Probe{
+						Handler:             corev1.Handler{Exec: &corev1.ExecAction{Command: []string{"mountpoint", targetPath}}},
 						InitialDelaySeconds: 40,
 						TimeoutSeconds:      3,
 						PeriodSeconds:       10,
@@ -208,35 +231,39 @@ func (ns *nodeServer) buildPodSpec(ctx context.Context, targetPath, volName stri
 					},
 				},
 			},
-			Volumes: []v1.Volume{
+			Volumes: []corev1.Volume{
 				{
 					Name: "cfs-conf",
-					VolumeSource: v1.VolumeSource{
-						EmptyDir: &v1.EmptyDirVolumeSource{},
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
 					},
 				},
 				{
 					Name: "cfs-logs",
-					VolumeSource: v1.VolumeSource{
-						EmptyDir: &v1.EmptyDirVolumeSource{},
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
 					},
 				},
 				{
 					Name: "csi-target-mount",
-					VolumeSource: v1.VolumeSource{
-						HostPath: &v1.HostPathVolumeSource{
+					VolumeSource: corev1.VolumeSource{
+						HostPath: &corev1.HostPathVolumeSource{
 							Path: targetPath,
-							Type: func() *v1.HostPathType { t := v1.HostPathDirectoryOrCreate; return &t }(),
+							Type: func() *corev1.HostPathType { t := corev1.HostPathDirectoryOrCreate; return &t }(),
 						},
 					},
 				},
 			},
-			NodeSelector: ns.getNodeSelector(),
+			NodeSelector: schedulingConfig.NodeSelector,
+			Tolerations:  schedulingConfig.Tolerations,
+			Affinity: &corev1.Affinity{
+				NodeAffinity: schedulingConfig.NodeAffinity,
+			},
 		},
 	}, nil
 }
 
-func (ns *nodeServer) waitForClientPodReady(ctx context.Context, podName, podNamespace, targetPath string) (*v1.Pod, error) {
+func (ns *nodeServer) waitForClientPodReady(ctx context.Context, podName, podNamespace, targetPath string) (*corev1.Pod, error) {
 	timeout := 2 * time.Minute
 	ticker := time.NewTicker(3 * time.Second)
 	defer ticker.Stop()
@@ -254,7 +281,7 @@ func (ns *nodeServer) waitForClientPodReady(ctx context.Context, podName, podNam
 			}
 
 			// Pod status is Running
-			if pod.Status.Phase != v1.PodRunning {
+			if pod.Status.Phase != corev1.PodRunning {
 				continue
 			}
 
@@ -478,7 +505,7 @@ func (ns *nodeServer) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstag
 	stagingPath := req.GetStagingTargetPath()
 	volumeID := req.GetVolumeId()
 	volumeContext := make(map[string]string)
-	var targetPV *v1.PersistentVolume
+	var targetPV *corev1.PersistentVolume
 
 	if volumeID == "" || stagingPath == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "NodeUnstageVolume missing parameter, volumeID: %s, stagingPath: %s", volumeID, stagingPath)
@@ -605,11 +632,11 @@ func (ns *nodeServer) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVo
 }
 
 type persistentVolumeWithPods struct {
-	*v1.PersistentVolume
-	pods []*v1.Pod
+	*corev1.PersistentVolume
+	pods []*corev1.Pod
 }
 
-func (p *persistentVolumeWithPods) appendPodUnique(newPod *v1.Pod) {
+func (p *persistentVolumeWithPods) appendPodUnique(newPod *corev1.Pod) {
 	for _, pod := range p.pods {
 		if pod.UID == newPod.UID {
 			return
@@ -654,7 +681,7 @@ func (ns *nodeServer) getAttachedPVWithPods() ([]*persistentVolumeWithPods, erro
 	}
 	for i := range pods.Items {
 		pod := &pods.Items[i]
-		if pod.Status.Phase != v1.PodRunning {
+		if pod.Status.Phase != corev1.PodRunning {
 			continue
 		}
 		for _, vol := range pod.Spec.Volumes {

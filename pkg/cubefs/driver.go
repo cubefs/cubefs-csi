@@ -21,7 +21,7 @@ import (
 	"github.com/cubefs/cubefs-csi/pkg/csi-common"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -129,7 +129,7 @@ func (d *driver) Run(endpoint string) {
 	csicommon.RunControllerandNodePublishServer(endpoint, NewIdentityServer(d), NewControllerServer(d), NewNodeServer(d))
 }
 
-func (d *driver) queryPersistentVolumes(ctx context.Context, pvName string) (*v1.PersistentVolume, error) {
+func (d *driver) queryPersistentVolumes(ctx context.Context, pvName string) (*corev1.PersistentVolume, error) {
 	persistentVolume, err := d.CSIDriver.ClientSet.CoreV1().PersistentVolumes().Get(ctx, pvName, metav1.GetOptions{})
 	if err != nil {
 		return nil, err

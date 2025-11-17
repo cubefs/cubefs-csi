@@ -19,7 +19,7 @@ package cubefs
 import (
 	"strings"
 
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/klog/v2"
 )
@@ -130,7 +130,7 @@ func parseBoolToString(val string, defaultVal string) string {
 }
 
 // 解析Pod资源配置
-func ParsePodResource(volumeContext map[string]string) (req v1.ResourceList, limit v1.ResourceList) {
+func ParsePodResource(volumeContext map[string]string) (req corev1.ResourceList, limit corev1.ResourceList) {
 	// 解析CPU配置
 	cpuReq := getParamWithDefault(volumeContext, KeyPodCPURequest, DefaultPodCPURequest)
 	cpuLimit := getParamWithDefault(volumeContext, KeyPodCPULimit, DefaultPodCPULimit)
@@ -139,32 +139,32 @@ func ParsePodResource(volumeContext map[string]string) (req v1.ResourceList, lim
 	memLimit := getParamWithDefault(volumeContext, KeyPodMemLimit, DefaultPodMemLimit)
 
 	// 构建资源列表（处理解析错误）
-	req = v1.ResourceList{}
+	req = corev1.ResourceList{}
 	if cpu, err := resource.ParseQuantity(cpuReq); err == nil {
-		req[v1.ResourceCPU] = cpu
+		req[corev1.ResourceCPU] = cpu
 	} else {
 		klog.Warningf("invalid CPU Request: %s, using default value: %s", cpuReq, DefaultPodCPURequest)
-		req[v1.ResourceCPU] = resource.MustParse(DefaultPodCPURequest)
+		req[corev1.ResourceCPU] = resource.MustParse(DefaultPodCPURequest)
 	}
 	if mem, err := resource.ParseQuantity(memReq); err == nil {
-		req[v1.ResourceMemory] = mem
+		req[corev1.ResourceMemory] = mem
 	} else {
 		klog.Warningf("invalid Memory Request: %s, using default value: %s", memReq, DefaultPodMemRequest)
-		req[v1.ResourceMemory] = resource.MustParse(DefaultPodMemRequest)
+		req[corev1.ResourceMemory] = resource.MustParse(DefaultPodMemRequest)
 	}
 
-	limit = v1.ResourceList{}
+	limit = corev1.ResourceList{}
 	if cpu, err := resource.ParseQuantity(cpuLimit); err == nil {
-		limit[v1.ResourceCPU] = cpu
+		limit[corev1.ResourceCPU] = cpu
 	} else {
 		klog.Warningf("invalid CPU Limit: %s, using default value: %s", cpuLimit, DefaultPodCPULimit)
-		limit[v1.ResourceCPU] = resource.MustParse(DefaultPodCPULimit)
+		limit[corev1.ResourceCPU] = resource.MustParse(DefaultPodCPULimit)
 	}
 	if mem, err := resource.ParseQuantity(memLimit); err == nil {
-		limit[v1.ResourceMemory] = mem
+		limit[corev1.ResourceMemory] = mem
 	} else {
 		klog.Warningf("invalid Memory Limit: %s, using default value: %s", memLimit, DefaultPodMemLimit)
-		limit[v1.ResourceMemory] = resource.MustParse(DefaultPodMemLimit)
+		limit[corev1.ResourceMemory] = resource.MustParse(DefaultPodMemLimit)
 	}
 
 	return req, limit
