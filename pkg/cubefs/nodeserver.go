@@ -43,12 +43,55 @@ type nodeServer struct {
 	*csicommon.DefaultNodeServer
 	mounter mount.Interface
 	mutex   sync.RWMutex
+	// NodeSelector
+	initOnceNodeSelector sync.Once
+	nodeSelector         map[string]string
 }
 
-// persistentVolumeWithPods 关联PV与使用该PV的Pod
-type persistentVolumeWithPods struct {
-	*v1.PersistentVolume
-	pods []*v1.Pod
+func (ns *nodeServer) getCurrentNamespace() string {
+	namespacePath := "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+	data, err := os.ReadFile(namespacePath)
+	namespace := strings.TrimSpace(string(data))
+	if err != nil || namespace == "" {
+		klog.Warningf("getCurrentNamespace fail")
+		return ""
+	}
+	klog.Infof("getCurrentNamespace success, namespace: %s", namespace)
+	return namespace
+}
+
+func (ns *nodeServer) initNodeSelector() {
+	var nodeSelector map[string]string
+	var defaultNodeSelector map[string]string = map[string]string{"component.cubefs.io/csi": "enabled"}
+
+	namespace := ns.getCurrentNamespace()
+	pods, err := ns.Driver.ClientSet.CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{
+		FieldSelector: fmt.Sprintf("spec.nodeName=%s", ns.Driver.NodeID),
+		LabelSelector: "app=cfs-csi-node",
+		Limit:         1,
+	})
+	if err != nil {
+		klog.Warningf("filtering CSI node Pod failed: %v", err)
+		nodeSelector = defaultNodeSelector
+	}
+	if len(pods.Items) == 0 {
+		klog.Warningf("CSI node Pod not found on node %s", ns.Driver.NodeID)
+		nodeSelector = defaultNodeSelector
+	}
+	csiNodePod := &pods.Items[0]
+	klog.Infof("successfully located local CSI node Pod: %s/%s", namespace, csiNodePod.Name)
+	nodeSelector = csiNodePod.Spec.NodeSelector
+	if len(nodeSelector) == 0 {
+		klog.Warningf("Pod %s is not configured with NodeSelector", csiNodePod.Name)
+		nodeSelector = defaultNodeSelector
+	}
+	ns.nodeSelector = nodeSelector
+	klog.Infof("initNodeSelector success: %v", nodeSelector)
+}
+
+func (ns *nodeServer) getNodeSelector() map[string]string {
+	ns.initOnceNodeSelector.Do(ns.initNodeSelector)
+	return ns.nodeSelector
 }
 
 // buildPodSpec 构建Cubefs Client Pod规格
@@ -188,7 +231,7 @@ func (ns *nodeServer) buildPodSpec(ctx context.Context, targetPath, volName stri
 					},
 				},
 			},
-			NodeSelector: map[string]string{"cubefs/support": "true"},
+			NodeSelector: ns.getNodeSelector(),
 		},
 	}, nil
 }
@@ -561,8 +604,11 @@ func (ns *nodeServer) NodeGetVolumeStats(ctx context.Context, req *csi.NodeGetVo
 	}, nil
 }
 
-// ------------------------------ 受损卷重挂载 ------------------------------
-// appendPodUnique 给PV添加唯一Pod
+type persistentVolumeWithPods struct {
+	*v1.PersistentVolume
+	pods []*v1.Pod
+}
+
 func (p *persistentVolumeWithPods) appendPodUnique(newPod *v1.Pod) {
 	for _, pod := range p.pods {
 		if pod.UID == newPod.UID {
@@ -572,7 +618,7 @@ func (p *persistentVolumeWithPods) appendPodUnique(newPod *v1.Pod) {
 	p.pods = append(p.pods, newPod)
 }
 
-// getAttachedPVWithPods 获取节点上已挂载PV及关联Pod
+// 获取节点上已挂载PV及关联Pod
 func (ns *nodeServer) getAttachedPVWithPods() ([]*persistentVolumeWithPods, error) {
 	vaList, err := ns.Driver.ClientSet.StorageV1().VolumeAttachments().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
@@ -632,7 +678,6 @@ func (ns *nodeServer) getAttachedPVWithPods() ([]*persistentVolumeWithPods, erro
 	return result, nil
 }
 
-// remountDamagedVolumes 重挂载受损卷
 func (ns *nodeServer) remountDamagedVolumes() {
 	start := time.Now()
 	klog.Infof("remountDamagedVolumes. node: %s", ns.Driver.NodeID)
@@ -647,7 +692,6 @@ func (ns *nodeServer) remountDamagedVolumes() {
 		return
 	}
 
-	// 并发重挂载
 	var wg sync.WaitGroup
 	wg.Add(len(pvWithPodsList))
 	for _, pvWithPods := range pvWithPodsList {
@@ -666,7 +710,6 @@ func (ns *nodeServer) remountDamagedVolumes() {
 				volumeContext[KeyCSIPVCNamespace] = pv.Spec.ClaimRef.Namespace
 			}
 
-			// 重挂载Global Mount
 			globalMountPath := filepath.Join(ns.KubeletRootDir, fmt.Sprintf("plugins/kubernetes.io/csi/pv/%s/globalmount", pv.Name))
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
@@ -679,7 +722,6 @@ func (ns *nodeServer) remountDamagedVolumes() {
 				return
 			}
 
-			// 重挂载Pod挂载点
 			readOnly := parseBool(getParamWithDefault(volumeContext, KeyCfsReadOnly, "false"))
 			for _, pod := range pvp.pods {
 				podMountPath := filepath.Join(ns.KubeletRootDir, "pods", string(pod.UID), fmt.Sprintf("volumes/kubernetes.io~csi/%s/mount", pv.Name))
