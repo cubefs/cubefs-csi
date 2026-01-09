@@ -25,6 +25,7 @@ spec:
             privileged: true
           args:
             - --csi-address=$(ADDRESS)
+            - --extra-create-metadata
           env:
             - name: TZ
               value: Asia/Shanghai

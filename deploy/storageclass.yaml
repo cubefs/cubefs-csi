@@ -7,6 +7,10 @@ allowVolumeExpansion: true
 reclaimPolicy: Delete
 parameters:
   # Resource manager IP address or URL
-  masterAddr: "master-service.cubefs.svc.cluster.local:17010"
+  csi.cubefs/master: "master-service.cubefs.svc.cluster.local:17010"
   # Owner name as authentication
-  owner: "csiuser"
+  csi.cubefs/owner: "csiuser"
+  # Client Pod Enabled
+  csi.client-pod/enabled: "false"
+  # Client Pod Image
+  csi.client-pod/image: ""

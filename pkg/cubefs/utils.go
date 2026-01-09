@@ -27,49 +27,64 @@ import (
 	"k8s.io/utils/mount"
 )
 
-const (
-	CfsClientBin = "/cfs/bin/cfs-client"
-)
-
 func parseEndpoint(ep string) (string, string, error) {
-	if strings.HasPrefix(strings.ToLower(ep), "unix://") || strings.HasPrefix(strings.ToLower(ep), "tcp://") {
-		s := strings.SplitN(ep, "://", 2)
-		if s[1] != "" {
-			return s[0], s[1], nil
+	lowerEp := strings.ToLower(ep)
+	if strings.HasPrefix(lowerEp, "unix://") || strings.HasPrefix(lowerEp, "tcp://") {
+		parts := strings.SplitN(ep, "://", 2)
+		if parts[1] != "" {
+			return parts[0], parts[1], nil
 		}
 	}
-	return "", "", fmt.Errorf("invalid endpoint: %v", ep)
+	return "", "", fmt.Errorf("invalid endpoint: %v (must start with unix://or tcp://)", ep)
 }
 
 func getFreePort(defaultPort int) (int, error) {
 	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
 	if err != nil {
-		return defaultPort, err
+		return defaultPort, fmt.Errorf("net.ResolveTCPAddr error: %v", err)
 	}
 
 	l, err := net.ListenTCP("tcp", addr)
 	if err != nil {
-		return defaultPort, err
+		return defaultPort, fmt.Errorf("net.ListenTCP error: %v", err)
 	}
-
 	defer l.Close()
-	return l.Addr().(*net.TCPAddr).Port, nil
+
+	tcpAddr, ok := l.Addr().(*net.TCPAddr)
+	if !ok {
+		return defaultPort, fmt.Errorf("unable convert to net.TCPAddr")
+	}
+	return tcpAddr.Port, nil
 }
 
-func createMountPoint(root string) error {
-	return os.MkdirAll(root, 0750)
+func createMountPoint(path string) error {
+	if err := os.MkdirAll(path, 0755); err != nil {
+		if !os.IsExist(err) {
+			return fmt.Errorf("create mountPoint: %s, err: %v", path, err)
+		}
+	}
+	return nil
 }
 
-// return true if mount
-func isMountPoint(targetPath string) (bool, error) {
-	notMnt, err := mount.New("").IsLikelyNotMountPoint(targetPath)
-	// notMnt is false if the target path has been mount
-	return !notMnt, err
+func isMountPoint(path string) (bool, error) {
+	if _, err := os.Stat(path); err != nil {
+		return false, fmt.Errorf("path %s does not exist, err: %v", path, err)
+	}
+	isNotMount, err := mount.New("").IsLikelyNotMountPoint(path)
+	if err != nil {
+		return false, fmt.Errorf("failed to determine the mounting point, path: %s, err: %v", path, err)
+	}
+	return !isNotMount, nil
 }
 
-func bindMount(stagingTargetPath string, targetPath string) error {
-	if _, err := execCommand("mount", "--bind", stagingTargetPath, targetPath); err != nil {
-		return fmt.Errorf("mount --bind %s to %s fail: %v", stagingTargetPath, targetPath, err)
+func bindMount(source, target string, readOnly bool) error {
+	options := []string{"bind"}
+	if readOnly {
+		options = append(options, "ro")
+	}
+	mounter := mount.New("")
+	if err := mounter.Mount(source, target, "", options); err != nil {
+		return fmt.Errorf("bind mount fail. %s->%s, opts=%v, err: %v", source, target, options, err)
 	}
 	return nil
 }
@@ -78,26 +93,29 @@ func listMount() ([]mount.MountPoint, error) {
 	return mount.New("").List()
 }
 
-func mountVolume(configFilePath string) error {
-	_, err := execCommand(CfsClientBin, "-c", configFilePath)
-	return err
-}
-
 func umountVolume(path string) error {
-	if _, err := execCommand("umount", path); err != nil {
-		return fmt.Errorf("umount %s fail: %v", path, err)
+	output, err := execCommand("umount", path)
+	if err != nil {
+		return fmt.Errorf("umount fail: %s, output: %s, err: %v", path, string(output), err)
 	}
 	return nil
 }
 
 func execCommand(command string, args ...string) ([]byte, error) {
 	cmd := exec.Command(command, args...)
-	return cmd.CombinedOutput()
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return output, fmt.Errorf("exec.Command fail: %s %s, err: %v", command, strings.Join(args, " "), err)
+	}
+	return output, nil
 }
 
-// remove the parent path of targetPath
 func CleanPath(targetPath string) error {
-	return os.RemoveAll(path.Dir(targetPath))
+	parentDir := path.Dir(targetPath)
+	if err := os.RemoveAll(parentDir); err != nil {
+		return fmt.Errorf("CleanPath: %s, err: %v", parentDir, err)
+	}
+	return nil
 }
 
 func pathExists(path string) (bool, error) {
@@ -108,5 +126,5 @@ func pathExists(path string) (bool, error) {
 	if os.IsNotExist(err) {
 		return false, nil
 	}
-	return false, err
+	return false, fmt.Errorf("path exists: %s, err: %v", path, err)
 }

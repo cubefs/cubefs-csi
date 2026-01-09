@@ -16,18 +16,17 @@ package cubefs
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/cubefs/cubefs-csi/pkg/csi-common"
-	"github.com/golang/glog"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/klog/v2"
 	"k8s.io/utils/mount"
 )
 
@@ -51,10 +50,10 @@ type Config struct {
 }
 
 func NewDriver(conf Config) (*driver, error) {
-	glog.Infof("driverName:%v, version:%v, nodeID:%v", conf.DriverName, conf.Version, conf.NodeID)
+	klog.Infof("driverName:%v, version:%v, nodeID:%v", conf.DriverName, conf.Version, conf.NodeID)
 	clientSet, err := initClientSet(conf.KubeConfig)
 	if err != nil {
-		glog.Errorf("init client-go Clientset fail. kubeconfig:%v, err:%v", conf.KubeConfig, err)
+		klog.Errorf("init client-go Clientset fail. kubeconfig:%v, err:%v", conf.KubeConfig, err)
 		return nil, err
 	}
 
@@ -123,14 +122,14 @@ func NewControllerServer(d *driver) *controllerServer {
 
 func (d *driver) Run(endpoint string) {
 	nodeServer := NewNodeServer(d)
-	if nodeName := os.Getenv("KUBE_NODE_NAME"); d.RemountDamaged && nodeName != "" {
-		nodeServer.remountDamagedVolumes(nodeName)
+	if d.RemountDamaged {
+		nodeServer.remountDamagedVolumes()
 	}
 
 	csicommon.RunControllerandNodePublishServer(endpoint, NewIdentityServer(d), NewControllerServer(d), NewNodeServer(d))
 }
 
-func (d *driver) queryPersistentVolumes(ctx context.Context, pvName string) (*v1.PersistentVolume, error) {
+func (d *driver) queryPersistentVolumes(ctx context.Context, pvName string) (*corev1.PersistentVolume, error) {
 	persistentVolume, err := d.CSIDriver.ClientSet.CoreV1().PersistentVolumes().Get(ctx, pvName, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
