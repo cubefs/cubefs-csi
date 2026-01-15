@@ -54,6 +54,9 @@ function startup {
         git checkout -b "$CUBEFS_RELEASE_BRANCH" "remotes/origin/$CUBEFS_RELEASE_BRANCH" -f
         new_tag=$(git describe --tags --abbrev=0)
         git checkout -b "$new_tag" "tags/$new_tag" -f
+        echo "Modifying metanode.json for e2e tests..."
+        $JQ 'del(.totalMem) | .memRatio = "70"' docker/conf/metanode.json > docker/conf/metanode.json.tmp && mv docker/conf/metanode.json.tmp docker/conf/metanode.json
+        cat docker/conf/metanode.json
         docker/run_docker.sh --build
         docker/run_docker.sh --monitor
         docker/run_docker.sh --server
