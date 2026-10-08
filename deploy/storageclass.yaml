@@ -10,3 +10,5 @@ parameters:
   masterAddr: "master-service.cubefs.svc.cluster.local:17010"
   # Owner name as authentication
   owner: "csiuser"
+  # Data replica count. Master default is 3 when this is omitted.
+  # replicaNum: "3"

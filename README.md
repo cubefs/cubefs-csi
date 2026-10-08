@@ -79,6 +79,8 @@ parameters:
   consulAddr: "http://consul-service.cubefs.svc.cluster.local:8500"
   owner: "csiuser"
   logLevel: "debug"
+  # Data replica count passed to Master createVol. Omit it to keep the default of 3.
+  replicaNum: "3"
 ```
 
 Creating command.
