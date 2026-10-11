@@ -48,6 +48,7 @@ const (
 	KZoneName     = "zoneName"
 	KConsulAddr   = "consulAddr"
 	KVolType      = "volType"
+	KReplicaNum   = "replicaNum"
 )
 
 const (
@@ -59,6 +60,7 @@ const (
 	jsonFileSuffix            = ".json"
 	defaultConsulAddr         = "http://consul-service.cubefs.svc.cluster.local:8500"
 	defaultVolType            = "0"
+	defaultReplicaNum         = "3"
 )
 
 const (
@@ -96,6 +98,9 @@ func newCfsServer(volName string, param map[string]string) (cs *cfsServer, err e
 	param[KLogDir] = defaultLogDir + newVolName
 	param[KConsulAddr] = getValueWithDefault(param, KConsulAddr, defaultConsulAddr)
 	param[KVolType] = getValueWithDefault(param, KVolType, defaultVolType)
+	if err = normalizeReplicaNum(param); err != nil {
+		return nil, err
+	}
 	return &cfsServer{
 		clientConfFile: clientConfFile,
 		masterAddrs:    strings.Split(masterAddr, ","),
@@ -110,6 +115,19 @@ func getValueWithDefault(param map[string]string, key string, defaultValue strin
 	}
 
 	return value
+}
+
+// replicaNum is the data replica count sent to Master createVol.
+// An empty value keeps the historical default of 3.
+func normalizeReplicaNum(param map[string]string) error {
+	value := getValueWithDefault(param, KReplicaNum, defaultReplicaNum)
+	switch value {
+	case "1", "2", "3":
+		param[KReplicaNum] = value
+		return nil
+	default:
+		return fmt.Errorf("invalid replicaNum %q, must be 1, 2 or 3", value)
+	}
 }
 
 func (cs *cfsServer) persistClientConf(mountPoint string) error {
@@ -136,10 +154,11 @@ func (cs *cfsServer) createVolume(capacityGB int64) (err error) {
 	token := cs.clientConf[KEnableToken]
 	zone := cs.clientConf[KZoneName]
 	volType := cs.clientConf[KVolType]
+	replicaNum := getValueWithDefault(cs.clientConf, KReplicaNum, defaultReplicaNum)
 
 	return cs.forEachMasterAddr("CreateVolume", func(addr string) error {
-		url := fmt.Sprintf("http://%s/admin/createVol?name=%s&capacity=%v&owner=%v&crossZone=%v&enableToken=%v&zoneName=%v&volType=%v",
-			addr, valName, capacityGB, owner, crossZone, token, zone, volType)
+		url := fmt.Sprintf("http://%s/admin/createVol?name=%s&capacity=%v&owner=%v&crossZone=%v&enableToken=%v&zoneName=%v&volType=%v&replicaNum=%v",
+			addr, valName, capacityGB, owner, crossZone, token, zone, volType, replicaNum)
 		glog.Infof("createVol url: %v", url)
 		resp, err := cs.executeRequest(url)
 		if err != nil {
